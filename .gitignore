@@ -1,0 +1,84 @@
+# -----------------------------
+# Python
+# -----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.eggs/
+*.manifest
+*.spec
+
+# Distribution / packaging
+build/
+dist/
+wheels/
+*.whl
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+pip-wheel-metadata/
+share/python-wheels/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# -----------------------------
+# uv specific
+# -----------------------------
+.uv/
+.uv-cache/
+
+# -----------------------------
+# VS Code
+# -----------------------------
+.vscode/
+.history/
+*.code-workspace
+
+# -----------------------------
+# Testing / Coverage
+# -----------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+.tox/
+.nox/
+
+# -----------------------------
+# Jupyter / IPython
+# -----------------------------
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+
+# -----------------------------
+# Logs & temp files
+# -----------------------------
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# Project specific
+# -----------------------------
+
+# Misc
+.github/
+.ruff_cache/
