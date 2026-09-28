@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/mrbakhtyari/TabK/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/mrbakhtyari/TabK/ci.yml?branch=main&style=flat-square&label=CI"/></a>
-  <a href="LICENSE"><img alt="License: CC BY-NC 4.0" src="https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg?style=flat-square"/></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square"/></a>
   <img alt="Python 3.13+" src="https://img.shields.io/badge/Python-3.13%2B-3776AB?style=flat-square&logo=python&logoColor=white"/>
   <img alt="PyTorch 2.9+" src="https://img.shields.io/badge/PyTorch-2.9%2B-EE4C2C?style=flat-square&logo=pytorch&logoColor=white"/>
   <img alt="Conference" src="https://img.shields.io/badge/NeurIPS_2026-Accepted-8B5CF6?style=flat-square"/>
@@ -173,4 +173,4 @@ TabK has been accepted at NeurIPS 2026. The paper link and citation will be adde
 
 ## License
 
-This project is released under the [CC BY-NC 4.0](LICENSE) license. It is intended for **educational and research purposes only**; commercial use is not permitted.
+This project is released under the [MIT License](LICENSE).
