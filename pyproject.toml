@@ -1,45 +1,40 @@
 [project]
-name = "TabK"
-version = "0.1.0"
-description = "Zero-shot cluster cardinality estimation for tabular data."
+name = "tabk"
+version = "1.0.0"
+description = "TabK: Amortized Bayesian estimation of the number of clusters in tabular data."
 readme = "README.md"
+license = "CC-BY-NC-4.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Mohammadreza Bakhtyari" }]
 requires-python = ">=3.13"
 dependencies = [
-    "clustpy>=0.0.2",
     "densired>=1.2.0",
-    "flash-linear-attention>=0.4.2",
     "h5py>=3.15.1",
     "matplotlib>=3.10.6",
     "numpy>=2.3.2",
-    "optuna>=4.5.0",
-    "pandas>=2.3.2",
     "pyclugen>=1.1.4",
-    "pyclustering>=0.10.1.2",
     "repliclust>=1.0.0",
     "scikit-learn>=1.7.1",
-    "seaborn>=0.13.2",
+    "scipy>=1.16.1",
     "torch>=2.9.1",
-    "torchinfo>=1.8.0",
-    "torchvision>=0.24.1",
     "tqdm>=4.67.1",
 ]
 
+[project.urls]
+Repository = "https://github.com/mrbakhtyari/TabK"
+
 [build-system]
-requires = ["uv_build>=0.6.6,<0.7"]
+requires = ["uv_build>=0.8.13,<0.9"]
 build-backend = "uv_build"
 
 [dependency-groups]
-
 dev = [
-    "ipykernel>=7.1.0",
-    "openml>=0.15.1",
     "pre-commit>=4.3.0",
-    "pycairo>=1.29.0",
+    "pyright>=1.1.405",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
     "ruff>=0.12.10",
 ]
-
 
 [tool.ruff]
 line-length = 100
@@ -59,9 +54,6 @@ explicit = true
 
 [[tool.uv.index]]
 name = "pypi"
-# The URL is optional for PyPI, but defining the index helps explicit resolution.
-# Alternatively, we can just remove 'explicit = true' from pytorch to allow fallback,
-# but keeping it explicit is safer. To mix explicit and default, we need to name the default.
 url = "https://pypi.org/simple"
 
 [tool.uv.sources]
