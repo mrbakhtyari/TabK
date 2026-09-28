@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.testing as npt
+import pytest
 import torch
 from sklearn.datasets import load_iris
 
@@ -14,9 +15,11 @@ from tabk.architecture.utils import create_model
 from tabk.utils import apply_standard_scaling
 
 
-def _build_inference_context() -> dict:
+def _build_inference_context(max_rows: int = 2500) -> dict:
     torch.manual_seed(7)
-    config = AppConfig(model=ModelConfig(d_model=32, n_head=4, n_layers=2, num_bins=8))
+    config = AppConfig(
+        model=ModelConfig(d_model=32, n_head=4, n_layers=2, num_bins=8), max_rows=max_rows
+    )
 
     model = create_model(config).to("cpu")
     model.eval()
@@ -46,6 +49,22 @@ def test_output_is_invariant_to_row_and_column_permutations():
     shuffled = run_single_inference(ctx, permuted)["raw_output"]
 
     npt.assert_allclose(original, shuffled, rtol=1e-4, atol=1e-5)
+
+
+def test_tables_above_max_rows_are_subsampled(caplog):
+    ctx = _build_inference_context(max_rows=30)
+    table = np.random.default_rng(2).normal(size=(100, 4)).astype(np.float32)
+
+    first = run_single_inference(ctx, table)["raw_output"]
+    second = run_single_inference(ctx, table)["raw_output"]
+
+    assert "subsampling 30 rows" in caplog.text
+    npt.assert_array_equal(first, second)
+
+
+def test_loading_directory_without_checkpoints_raises(tmp_path):
+    with pytest.raises(FileNotFoundError, match="No .pth checkpoints"):
+        load_inference_context(tmp_path, device="cpu")
 
 
 def test_pretrained_model_predicts_three_clusters_on_iris():

@@ -14,6 +14,7 @@ from .utils import create_model
 logger = logging.getLogger(__name__)
 
 PRETRAINED_REPO_ID = "mrbakhtyari/TabK"
+SUBSAMPLE_SEED = 0
 
 
 def load_inference_context(
@@ -38,9 +39,6 @@ def load_inference_context(
         models = _load_safetensors_models(model_dir, device)
     else:
         models = _load_models(model_dir, device)
-    if not models:
-        raise ValueError(f"No models loaded from {model}")
-
     config = models[0].app_config
     runtime_device = next(models[0].parameters()).device
 
@@ -55,26 +53,27 @@ def _load_models(
     model_dir: str | Path,
     device: str | torch.device | None = None,
 ) -> list[torch.nn.Module]:
-    models: list[torch.nn.Module] = []
+    """Load a training output directory: one ``checkpoints/*.pth`` file per fold."""
     model_files = sorted((Path(model_dir) / "checkpoints").glob("*.pth"))
     if not model_files:
-        logger.error("No model files found in %s", model_dir)
-        return []
+        raise FileNotFoundError(f"No .pth checkpoints found in {Path(model_dir) / 'checkpoints'}")
 
     device = _resolve_device(device)
+    models: list[torch.nn.Module] = []
     for model_path in model_files:
-        try:
-            checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-            config = AppConfig.from_dict(checkpoint.get("config") or {})
-            config.training.device = device.type
-            model = create_model(config)
-            model.load_state_dict(checkpoint["model_state_dict"])
-            model.to(device).eval()
-            model.app_config = config
-            models.append(model)
-        except Exception as exc:
-            logger.error("Failed to load model %s: %s", model_path, exc)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+        if not checkpoint.get("config"):
+            raise ValueError(f"{model_path} has no stored config")
 
+        config = AppConfig.from_dict(checkpoint["config"])
+        config.training.device = device.type
+        model = create_model(config)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.to(device).eval()
+        model.app_config = config
+        models.append(model)
+
+    logger.info("Loaded %d models from %s to %s", len(models), model_dir, device)
     return models
 
 
@@ -115,6 +114,16 @@ def _decode_predictions(models: list[torch.nn.Module], avg_output: torch.Tensor)
     return models[0].head.predict_k(avg_output).cpu().numpy()
 
 
+def _limit_rows(table_data: np.ndarray, max_rows: int) -> np.ndarray:
+    """Uniformly subsample rows of tables larger than the training range."""
+    rows = table_data.shape[0]
+    if rows <= max_rows:
+        return table_data
+    logger.warning("Table has %d rows; subsampling %d rows uniformly at random", rows, max_rows)
+    rng = np.random.default_rng(SUBSAMPLE_SEED)
+    return table_data[np.sort(rng.choice(rows, size=max_rows, replace=False))]
+
+
 def forward_single(inference_context: dict, table_data: np.ndarray) -> tuple[torch.Tensor, float]:
     """Run ensemble forward pass for a single table and return averaged output tensor
     along with inference time in milliseconds (measures only the model forward
@@ -122,8 +131,14 @@ def forward_single(inference_context: dict, table_data: np.ndarray) -> tuple[tor
     """
     device: torch.device = inference_context["device"]
     models: list[torch.nn.Module] = inference_context["models"]
+    config: AppConfig = inference_context["config"]
 
+    table_data = _limit_rows(table_data, config.max_rows)
     rows, cols = table_data.shape
+    if cols > config.max_cols:
+        logger.warning(
+            "Table has %d columns; the model was trained on at most %d", cols, config.max_cols
+        )
 
     tensor_data = torch.from_numpy(table_data).float().unsqueeze(0).to(device)
     r_mask = torch.zeros(1, rows, dtype=torch.bool, device=device)
