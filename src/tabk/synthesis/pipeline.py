@@ -5,6 +5,7 @@ import queue
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from multiprocessing.process import BaseProcess
 from multiprocessing.queues import Queue
 from pathlib import Path
 from typing import Any
@@ -16,13 +17,12 @@ from .core import ClusterConfig, DataGenerator, StrategyConfig
 from .registry import StrategySpec, default_registry
 from .reporting import (
     config_report,
-    save_dataset_manifest,
     save_run_metadata,
     save_strategy_params,
     save_timeout_log,
 )
 from .utils import suppress_output
-from .writer import DatasetWriter, NPZWriter
+from .writer import DatasetWriter, H5Writer
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class GenerationSettings:
     n_repeats: int = 10
     master_seed: int = 42
     output_dir: Path = Path("datasets")
+    test_ratio: float = 0.1
 
     # Safety mechanism
     timeout: float = 30.0  # Seconds before killing a hanging process. 0 to disable.
@@ -80,18 +81,17 @@ class _GenerationRunner:
 
     def __init__(self, timeout: float):
         self.timeout = timeout
-        self.worker: multiprocessing.Process | None = None
+        self.context = multiprocessing.get_context("spawn")
+        self.worker: BaseProcess | None = None
         self.input_q: Queue[Any] | None = None
         self.output_q: Queue[Any] | None = None
         if timeout > 0:
             self.start()
 
     def start(self) -> None:
-        self.input_q = multiprocessing.Queue()
-        self.output_q = multiprocessing.Queue()
-        self.worker = multiprocessing.Process(
-            target=_worker_loop, args=(self.input_q, self.output_q)
-        )
+        self.input_q = self.context.Queue()
+        self.output_q = self.context.Queue()
+        self.worker = self.context.Process(target=_worker_loop, args=(self.input_q, self.output_q))
         self.worker.daemon = True
         self.worker.start()
 
@@ -140,12 +140,6 @@ def run_generation(
     timeout_events = []
 
     strategies = strategies or default_registry()
-    writer = writer or NPZWriter(
-        settings.output_dir,
-        n_configs=settings.n_configs,
-        n_repeats=settings.n_repeats,
-    )
-
     settings.output_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Datasets will be saved under: {settings.output_dir}")
 
@@ -169,8 +163,19 @@ def run_generation(
     # Generate report for the configs
     config_report(cluster_configs, settings.output_dir, seed=settings.master_seed)
 
+    h5_writer = None
+    if writer is None:
+        h5_writer = H5Writer(
+            settings.output_dir / "datalake.h5",
+            n_repeats=settings.n_repeats,
+            test_ratio=settings.test_ratio,
+            seed=settings.master_seed,
+        )
+        writer = h5_writer
+
     runner = _GenerationRunner(settings.timeout)
 
+    completed = False
     try:
         for cfg_idx, (cfg, cfg_ss) in enumerate(zip(cluster_configs, cfg_seed_sequences)):
             try:
@@ -240,8 +245,14 @@ def run_generation(
                         cfg=cfg,
                         repeats=repeats_payload,
                     )
+        completed = True
     finally:
         runner.stop()
+        if h5_writer is not None:
+            if completed:
+                h5_writer.finish()
+            else:
+                h5_writer.abort()
 
     pipeline_duration = time.perf_counter() - pipeline_start_time
     logger.info(f"Pipeline completed in {pipeline_duration:.2f}s")
@@ -258,6 +269,3 @@ def run_generation(
         total_gen_time,
         settings.output_dir,
     )
-
-    # Save dataset manifest
-    save_dataset_manifest(settings.output_dir)

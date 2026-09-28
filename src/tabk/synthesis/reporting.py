@@ -112,23 +112,3 @@ def save_run_metadata(
             json.dump(metadata, f, indent=4)
     except Exception as e:
         logger.error(f"Failed to save run metadata: {e}")
-
-
-def save_dataset_manifest(output_dir: Path) -> None:
-    """Write the absolute paths of all generated .npz files to dataset_paths.txt."""
-    try:
-        logger.info(f"Scanning {output_dir} for generated .npz datasets...")
-        npz_files = sorted(output_dir.rglob("*.npz"))
-
-        if npz_files:
-            manifest_path = output_dir / "dataset_paths.txt"
-            with open(manifest_path, "w") as f:
-                for p in npz_files:
-                    f.write(str(p.resolve()) + "\n")
-
-            logger.info(f"Successfully wrote {len(npz_files)} dataset paths to {manifest_path}")
-        else:
-            logger.warning("No .npz files found after generation; manifest not created.")
-
-    except Exception as e:
-        logger.error(f"Failed to save dataset manifest: {e}")

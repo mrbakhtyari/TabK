@@ -103,7 +103,7 @@ def _predict(args: argparse.Namespace) -> None:
 
 
 def _generate(args: argparse.Namespace) -> None:
-    from .synthesis import GenerationSettings, build_h5_from_raw, default_registry, run_generation
+    from .synthesis import GenerationSettings, default_registry, run_generation
 
     strategies = None
     if args.strategies:
@@ -117,6 +117,7 @@ def _generate(args: argparse.Namespace) -> None:
         n_repeats=args.n_repeats,
         master_seed=args.seed,
         output_dir=args.out,
+        test_ratio=args.test_ratio,
         timeout=args.timeout,
         n_configs=args.n_configs,
         k_min=args.k_min,
@@ -127,7 +128,6 @@ def _generate(args: argparse.Namespace) -> None:
         d_high=args.d_high,
     )
     run_generation(settings, strategies=strategies)
-    build_h5_from_raw(args.out, out_h5=DATALAKE_NAME, test_ratio=args.test_ratio, seed=args.seed)
     print(f"Training data written to {args.out}")
 
 

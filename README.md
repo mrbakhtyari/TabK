@@ -81,7 +81,7 @@ Features are standardized automatically. The pretrained model predicts *k* ∈ {
 ## Training
 
 ```bash
-uv run tabk generate   # synthetic training data  -> datasets/synthetic
+uv run tabk generate   # writes datasets/synthetic/datalake.h5
 uv run tabk train      # 5-fold ensemble           -> models/TabK_retrained
 ```
 
@@ -117,7 +117,7 @@ TabK/
 │   ├── synthesis/               # Synthetic data generation (generative prior)
 │   │   ├── strategies.py        # Geometric generators (see paper Section B)
 │   │   ├── pipeline.py          # Parallel generation with timeout safety
-│   │   ├── h5_builder.py        # Raw NPZ → unified HDF5 DataLake
+│   │   ├── writer.py            # HDF5 dataset writer
 │   │   └── registry.py          # Strategy registry & hyperparameter samplers
 │   │
 │   └── utils/                   # Preprocessing, logging and progress helpers

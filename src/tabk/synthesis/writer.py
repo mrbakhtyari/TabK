@@ -1,12 +1,18 @@
-import os
-from dataclasses import dataclass
-from datetime import datetime
+import json
+import logging
+import random
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
+import h5py
 import numpy as np
 
+from tabk.utils import apply_standard_scaling
+
+from .core import ClusterConfig
 from .utils import to_jsonable
+
+logger = logging.getLogger(__name__)
 
 
 class DatasetWriter(Protocol):
@@ -14,63 +20,89 @@ class DatasetWriter(Protocol):
         self,
         strategy_name: str,
         cfg_idx: int,
-        cfg: Any,
-        repeats: list[dict],
+        cfg: ClusterConfig,
+        repeats: list[dict[str, Any]],
     ) -> None: ...
 
 
-@dataclass(slots=True)
-class NPZWriter:
-    base_dir: Path
-    n_configs: int = 1000
-    n_repeats: int = 100
+def _sample_id(strategy: str, cfg_idx: int, rep_id: str) -> str:
+    return f"{strategy}_cfg{cfg_idx:05d}_{rep_id}"
+
+
+class H5Writer:
+    """Write generated samples to one HDF5 file and assign splits at completion."""
+
+    def __init__(self, path: Path, n_repeats: int, test_ratio: float, seed: int):
+        self.path = path
+        self.n_repeats = n_repeats
+        self.test_ratio = test_ratio
+        self.seed = seed
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._temp_path = path.with_name(f"{path.name}.tmp")
+        self._file = h5py.File(self._temp_path, "w")
+        self._root = self._file.create_group("datasets")
+        self._samples: list[tuple[str, int, str, str]] = []
 
     def save_group(
         self,
         strategy_name: str,
         cfg_idx: int,
-        cfg: Any,
-        repeats: list[dict],
+        cfg: ClusterConfig,
+        repeats: list[dict[str, Any]],
     ) -> None:
-        cfg_width = len(str(self.n_configs - 1))
         rep_width = len(str(self.n_repeats - 1))
-
-        target_dir = Path(self.base_dir) / strategy_name / f"cfg{cfg_idx:0{cfg_width}d}"
-        os.makedirs(target_dir, exist_ok=True)
-
-        base_name = f"{strategy_name}_cfg{cfg_idx:0{cfg_width}d}"
-        npz_path = target_dir / f"{base_name}.npz"
-        meta_path = target_dir / f"{base_name}.json"
-
-        save_dict: dict[str, np.ndarray] = {}
-        seeds: dict[str, int] = {}
-        strat_cfgs: dict[str, Any] = {}
-
         for rep_idx, rep in enumerate(repeats):
-            X = np.asarray(rep["X"], dtype=np.float64)
-            y = np.asarray(rep["y"], dtype=np.int64)
+            rep_id = f"rep{rep_idx:0{rep_width}d}"
+            sample_id = _sample_id(strategy_name, cfg_idx, rep_id)
+            if sample_id in self._root:
+                logger.warning("Duplicate sample_id: %s, skipping", sample_id)
+                continue
 
-            save_dict[f"rep{rep_idx:0{rep_width}d}_X"] = X
-            save_dict[f"rep{rep_idx:0{rep_width}d}_y"] = y
+            try:
+                X_raw = np.asarray(rep["X"], dtype=np.float64)
+                y = np.asarray(rep["y"], dtype=np.int64)
+                X_norm = apply_standard_scaling(X_raw)
+            except Exception as exc:
+                logger.warning("Failed to normalize %s: %s", sample_id, exc)
+                continue
 
-            seeds[f"rep{rep_idx:0{rep_width}d}"] = int(rep["seed"])
-            strat_cfgs[f"rep{rep_idx:0{rep_width}d}"] = to_jsonable(rep["strategy_config"])
+            group = self._root.create_group(sample_id)
+            group.create_dataset("normalized_features", data=X_norm)
+            group.create_dataset("labels", data=y)
+            group.attrs["config_group_id"] = f"{strategy_name}_cfg{cfg_idx:05d}"
+            group.attrs["k_value"] = cfg.num_clusters
+            group.attrs["strategy"] = strategy_name
+            group.attrs["cfg_index"] = cfg_idx
+            group.attrs["n_objects"] = cfg.num_samples
+            group.attrs["n_dimensions"] = cfg.num_dimensions
+            group.attrs["seed"] = int(rep["seed"])
+            group.attrs["strategy_config_json"] = json.dumps(
+                to_jsonable(rep["strategy_config"]), default=str
+            )
+            self._samples.append((strategy_name, cfg_idx, rep_id, sample_id))
 
-        np.savez_compressed(npz_path, **save_dict)  # pyright: ignore[reportArgumentType]
+    def finish(self) -> None:
+        """Assign deterministic splits and publish the complete file."""
+        try:
+            if not self._samples:
+                raise ValueError("No samples were generated")
 
-        meta = {
-            "created_at": datetime.now().isoformat() + "Z",
-            "strategy_name": strategy_name,
-            "cfg_index": cfg_idx,
-            "n_repeats": len(repeats),
-            "file": os.path.relpath(npz_path, self.base_dir),
-            "seeds": seeds,
-            "cluster_config": to_jsonable(cfg),
-            "strategy_configs": strat_cfgs,
-        }
+            sample_ids = [item[3] for item in sorted(self._samples)]
+            indices = list(range(len(sample_ids)))
+            random.Random(self.seed).shuffle(indices)
+            n_test = max(1, int(len(indices) * self.test_ratio))
+            test_ids = {sample_ids[i] for i in indices[:n_test]}
+            for sample_id in sample_ids:
+                group = cast(h5py.Group, self._root[sample_id])
+                group.attrs["split"] = "test" if sample_id in test_ids else "train"
 
-        meta_path.write_text(
-            __import__("json").dumps(meta, indent=2),
-            encoding="utf-8",
-        )
-        print(f"  Saved grouped: {npz_path.name} and metadata JSON")
+            self._file.close()
+            self._temp_path.replace(self.path)
+        except Exception:
+            self.abort()
+            raise
+
+    def abort(self) -> None:
+        """Close an incomplete file without replacing the previous output."""
+        self._file.close()
+        self._temp_path.unlink(missing_ok=True)

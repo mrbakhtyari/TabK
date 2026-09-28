@@ -3,6 +3,7 @@ from pathlib import Path
 from queue import Empty
 from typing import Any
 
+import h5py
 import numpy as np
 import pytest
 
@@ -13,6 +14,7 @@ from tabk.synthesis import (
     pipeline,
     run_generation,
 )
+from tabk.utils import apply_standard_scaling
 
 
 # Top-level strategy class to be picklable for multiprocessing tests
@@ -189,8 +191,15 @@ def test_run_generation_recovers_after_timeout_and_skips_failed_repeat(
         def join(self, timeout=None):  # noqa: ARG002
             pass
 
-    monkeypatch.setattr(pipeline.multiprocessing, "Queue", FakeQueue)
-    monkeypatch.setattr(pipeline.multiprocessing, "Process", FakeProcess)
+    class FakeContext:
+        Queue = FakeQueue
+        Process = FakeProcess
+
+    def fake_get_context(method):
+        assert method == "spawn"
+        return FakeContext()
+
+    monkeypatch.setattr(pipeline.multiprocessing, "get_context", fake_get_context)
 
     calls_writer = RecordingWriter()
     spec = StrategySpec(
@@ -248,3 +257,46 @@ def test_inprocess_queue_empty_is_a_generation_error(
     assert calls_writer.calls == []
     assert not (tmp_path / "timeouts.log").exists()
     assert "Failed to generate Failing" in caplog.text
+
+
+def test_generation_writes_normalized_h5_with_deterministic_splits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(pipeline, "generate_configs", _fake_generate_configs_single)
+    monkeypatch.setattr(pipeline, "DataGenerator", _fake_data_generator_class())
+    strategies = [
+        StrategySpec(name, TopLevelDummyStrategy, _sampler, lambda cfg: True)
+        for name in ("Zulu", "Alpha")
+    ]
+    run_generation(
+        GenerationSettings(
+            output_dir=tmp_path,
+            n_configs=1,
+            n_repeats=3,
+            master_seed=19,
+            timeout=0,
+            test_ratio=0.25,
+        ),
+        strategies=strategies,
+    )
+
+    assert not list(tmp_path.rglob("*.npz"))
+    assert not (tmp_path / "datalake.h5.tmp").exists()
+    with h5py.File(tmp_path / "datalake.h5") as h5f:
+        samples = h5f["datasets"]
+        assert set(samples) == {
+            f"{strategy}_cfg00000_rep{rep}" for strategy in ("Alpha", "Zulu") for rep in range(3)
+        }
+        assert {
+            sample_id for sample_id in samples if samples[sample_id].attrs["split"] == "test"
+        } == {"Alpha_cfg00000_rep1"}
+        for sample_id in samples:
+            sample = samples[sample_id]
+            seed = int(sample.attrs["seed"])
+            X = np.random.default_rng(seed).random((4, 2), dtype=np.float64)
+            np.testing.assert_array_equal(
+                sample["normalized_features"][:], apply_standard_scaling(X)
+            )
+            np.testing.assert_array_equal(sample["labels"][:], [0, 1, 1, 0])
+            assert sample.attrs["k_value"] == 3
+            assert sample.attrs["config_group_id"] == sample_id.rsplit("_", 1)[0]

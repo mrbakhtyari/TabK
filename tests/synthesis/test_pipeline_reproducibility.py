@@ -7,6 +7,7 @@ import tempfile
 import time
 from pathlib import Path
 
+import h5py
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -109,21 +110,6 @@ def verify_directories_identical(dir1: Path, dir2: Path) -> bool:
                     real_diffs.append(filename)
                 continue
 
-            if filename == "dataset_paths.txt":
-                # Manifest holds absolute paths; compare them relative to each run dir
-                rel1 = [
-                    Path(p).relative_to(dir1.resolve()).as_posix()
-                    for p in (dir1 / filename).read_text().splitlines()
-                ]
-                rel2 = [
-                    Path(p).relative_to(dir2.resolve()).as_posix()
-                    for p in (dir2 / filename).read_text().splitlines()
-                ]
-                if rel1 != rel2:
-                    logger.error(f"Manifest mismatch in {filename}")
-                    real_diffs.append(filename)
-                continue
-
             if filename.endswith(".json"):
                 # Load and compare content ignoring created_at and other metadata
                 try:
@@ -148,28 +134,23 @@ def verify_directories_identical(dir1: Path, dir2: Path) -> bool:
                 except Exception as e:
                     logger.error(f"Error comparing JSONs {filename}: {e}")
                     real_diffs.append(filename)
-            elif filename.endswith(".npz"):
-                # Compare NPZ content
+            elif filename.endswith(".h5"):
                 try:
-                    d1 = np.load(dir1 / filename)
-                    d2 = np.load(dir2 / filename)
-                    keys1 = set(d1.keys())
-                    keys2 = set(d2.keys())
-                    if keys1 != keys2:
-                        logger.error(f"NPZ keys mismatch in {filename}: {keys1 ^ keys2}")
-                        real_diffs.append(filename)
-                        continue
-
-                    diff_keys = []
-                    for k in keys1:
-                        if not np.array_equal(d1[k], d2[k]):
-                            diff_keys.append(k)
-
-                    if diff_keys:
-                        logger.error(f"NPZ content mismatch in {filename} keys: {diff_keys}")
-                        real_diffs.append(filename)
+                    with h5py.File(dir1 / filename) as h1, h5py.File(dir2 / filename) as h2:
+                        samples1, samples2 = h1["datasets"], h2["datasets"]
+                        if set(samples1) != set(samples2):
+                            real_diffs.append(filename)
+                            continue
+                        for sample_id in samples1:
+                            left, right = samples1[sample_id], samples2[sample_id]
+                            if dict(left.attrs) != dict(right.attrs) or any(
+                                not np.array_equal(left[key][:], right[key][:])
+                                for key in ("normalized_features", "labels")
+                            ):
+                                real_diffs.append(filename)
+                                break
                 except Exception as e:
-                    logger.error(f"Error comparing NPZs {filename}: {e}")
+                    logger.error(f"Error comparing HDF5 files {filename}: {e}")
                     real_diffs.append(filename)
             else:
                 real_diffs.append(filename)
