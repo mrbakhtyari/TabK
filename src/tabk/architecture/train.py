@@ -82,6 +82,7 @@ def train_one_epoch(
     use_scaler = scaler is not None and scaler.is_enabled()
     accum_steps = config.training.accum_steps
     num_batches = len(loader)
+    last_window_start = num_batches - (num_batches % accum_steps or accum_steps)
 
     progress_desc = f"Fold {fold_idx + 1} | Epoch {epoch_idx + 1}/{config.training.epochs}"
     use_live_progress = is_interactive_stream()
@@ -103,7 +104,8 @@ def train_one_epoch(
             logits = model(x, r_mask, c_mask)
             loss = criterion(logits, y)
 
-        scaled_loss = loss / accum_steps
+        window = num_batches - last_window_start if i >= last_window_start else accum_steps
+        scaled_loss = loss / window
 
         if use_scaler:
             scaler.scale(scaled_loss).backward()
