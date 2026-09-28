@@ -9,39 +9,16 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
-from .ablation_models import (
-    ModelWithoutColumnInteraction,
-    ModelWithoutPMA,
-    ModelWithoutQFE,
-)
 from .config import AppConfig
-from .heads import get_head
+from .head import KHead
 from .model import DoubleInvariantTransformer
 
 logger = logging.getLogger(__name__)
 
 
-def create_model(config: AppConfig) -> torch.nn.Module:
-    """Create model based on config.
-
-    Returns:
-        Model instance with head attached
-    """
-    model_type = config.model.model_type
-
-    # Head config is now directly available via polymorphism
-    head = get_head(config)
-
-    if model_type == "default":
-        return DoubleInvariantTransformer(config.model, head=head)
-    elif model_type == "qfe_simple":
-        return ModelWithoutQFE(config.model, head=head)
-    elif model_type == "pool_mean":
-        return ModelWithoutPMA(config.model, head=head)
-    elif model_type == "no_col_attn":
-        return ModelWithoutColumnInteraction(config.model, head=head)
-
-    raise ValueError(f"Unknown model type '{model_type}'")
+def create_model(config: AppConfig) -> DoubleInvariantTransformer:
+    head = KHead(config.model.d_model, config.head_config)
+    return DoubleInvariantTransformer(config.model, head=head)
 
 
 def set_seed(seed: int):
@@ -223,33 +200,6 @@ def log_training_configuration(config: AppConfig) -> None:
                 logger.info(f"  {section}: {values}")
     else:
         logger.warning("No config provided to log_training_configuration")
-
-
-def calculate_class_weights(samples: list[dict], min_k: int, max_k: int) -> list[float] | None:
-    """Calculate class weights from training samples.
-
-    Weights are inversely proportional to class frequencies: w_j = N / (C * n_j).
-    Only counts k_values from the provided samples to avoid information leakage.
-    """
-    num_classes = max_k - min_k + 1
-    class_counts = np.zeros(num_classes)
-
-    for sample in samples:
-        k = sample.get("k_value")
-        if k is not None and min_k <= int(k) <= max_k:
-            class_counts[int(k) - min_k] += 1
-
-    valid_classes = class_counts > 0
-    if not np.any(valid_classes):
-        logger.warning("No valid samples found in range [min_k, max_k]. Using uniform weights.")
-        return None
-
-    n_samples = np.sum(class_counts)
-    weights = np.ones(num_classes)
-    weights[valid_classes] = n_samples / (num_classes * class_counts[valid_classes])
-
-    logger.info(f"Class weights calculated from {int(n_samples)} \n training samples: {weights}")
-    return weights.tolist()
 
 
 def log_fold_results(fold_results: list[float]) -> None:

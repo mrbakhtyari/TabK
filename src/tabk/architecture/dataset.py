@@ -45,8 +45,6 @@ class H5Dataset(Dataset):
         config: AppConfig,
     ):
         target_transform = config.head_config.target_transform
-        self.target_dtype = config.head_config.target_dtype
-        head_type = config.head_config.head_type
 
         self.features: list[np.ndarray] = []
         self.targets: list[np.ndarray] = []
@@ -60,15 +58,8 @@ class H5Dataset(Dataset):
                 group = root[sid]
                 self.features.append(group["normalized_features"][:])
 
-                if head_type == "k_estimator":
-                    raw = np.array(group.attrs["k_value"])
-                elif head_type == "algorithm_recommender":
-                    raw = group["ari_scores"][:]
-                else:
-                    raise ValueError(f"Unsupported head_type: {head_type}")
-
                 # Precompute transform once (not per __getitem__)
-                self.targets.append(target_transform(raw))
+                self.targets.append(target_transform(group.attrs["k_value"]))
 
         write_progress_line(f"Caching data into RAM | end | cached: {len(self.features)} samples")
 
@@ -78,7 +69,7 @@ class H5Dataset(Dataset):
     def __getitem__(self, idx):
         return (
             torch.as_tensor(self.features[idx], dtype=torch.float32),
-            torch.as_tensor(self.targets[idx], dtype=self.target_dtype),
+            torch.as_tensor(self.targets[idx], dtype=torch.float32),
         )
 
 

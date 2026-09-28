@@ -18,7 +18,7 @@ from tqdm import tqdm
 from ..utils.progress import is_interactive_stream, write_progress_line
 from .config import AppConfig
 from .dataset import H5Dataset, collate_batch, scan_h5_datalake
-from .utils import calculate_class_weights, create_model, save_checkpoint
+from .utils import create_model, save_checkpoint
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,7 @@ def train_fold(
         milestones=[warmup_steps],
     )
 
-    criterion = model.head.get_loss_fn().to(device)
+    criterion = model.head.loss_fn().to(device)
 
     # BF16 on Ampere+ (no scaler needed); FP16+GradScaler on older GPUs
     use_bf16 = device.type == "cuda" and torch.cuda.is_bf16_supported()
@@ -250,11 +250,6 @@ def train_fold(
             best_val_mae = val_mae
             best_checkpoint_path = Path(output_dir) / f"checkpoint_fold_{fold_idx + 1}.pth"
 
-            checkpoint_info = dict(val_metrics)
-            head_config = config.head_config
-            if hasattr(head_config, "class_weights") and head_config.class_weights is not None:
-                checkpoint_info["class_weights"] = head_config.class_weights
-
             save_checkpoint(
                 model,
                 optimizer,
@@ -263,7 +258,7 @@ def train_fold(
                 best_checkpoint_path,
                 fold_idx=fold_idx,
                 config=config,
-                additional_info=checkpoint_info,
+                additional_info=dict(val_metrics),
             )
             counter = 0
         else:
@@ -319,16 +314,6 @@ def execute_kfold_training(
     for fold, (train_idx, val_idx) in enumerate(kf.split(dummy_x, k_values)):
         fold_start = time.time()
         logger.info(f"\nFold {fold + 1}/{config.training.k_folds}")
-
-        # Compute class weights from training fold only (leakage-safe)
-        head_config = config.head_config
-        if getattr(head_config, "needs_class_weights", False):
-            train_meta = [metadata[i] for i in train_idx]
-            head_config.class_weights = calculate_class_weights(
-                [{"k_value": m["k_value"]} for m in train_meta],
-                head_config.min_k,
-                head_config.max_k,
-            )
 
         # Subset views — no data copy, no re-read
         train_subset = Subset(full_dataset, train_idx.tolist())

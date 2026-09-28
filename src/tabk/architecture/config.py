@@ -1,5 +1,5 @@
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 import numpy as np
@@ -7,86 +7,21 @@ import torch
 
 
 @dataclass
-class BaseHeadConfig:
-    """Abstract base configuration for task heads."""
-
-    head_type: str = field(init=False)
-
-    def target_transform(self, raw_target: np.ndarray) -> np.ndarray:
-        """Default: cast to float32."""
-        return raw_target.astype(np.float32)
-
-    @property
-    def target_dtype(self) -> torch.dtype:
-        return torch.float32
-
-
-@dataclass
-class KEstimatorConfig(BaseHeadConfig):
-    head_type: str = field(default="k_estimator", init=False)
+class HeadConfig:
     min_k: int = 2
     max_k: int = 15
-    mode: str = (
-        "distribution"  # "distribution" | "classification" | "focal" | "ordinal" | "regression"
-    )
     sigma: float = 0.5
-    class_weights: list[float] | None = None
-
-    @property
-    def needs_class_weights(self) -> bool:
-        """Whether this mode uses weighted loss (class weights should be computed)."""
-        return False
 
     @property
     def num_classes(self) -> int:
         return self.max_k - self.min_k + 1
 
-    def target_transform(self, raw_target: np.ndarray) -> np.ndarray:
-        """Transform raw k value to target.
-
-        - distribution: soft Gaussian distribution over classes (float32)
-        - classification / focal: 0-indexed class label (int64)
-        - ordinal: cumulative binary vector [1,..,1,0,..,0] (float32)
-        - regression: raw k value as float scalar (float32)
-        """
-        if isinstance(raw_target, np.ndarray):
-            k = int(raw_target.item())
-        else:
-            k = int(raw_target)
-
-        k = max(self.min_k, min(k, self.max_k))
-        class_idx = k - self.min_k
-
-        if self.mode == "distribution":
-            class_indices = np.arange(self.num_classes, dtype=np.float32)
-            variance = 2 * (self.sigma**2)
-            squared_diff = (class_indices - class_idx) ** 2
-            target_dist = np.exp(-squared_diff / variance)
-            target_dist /= target_dist.sum()
-            return target_dist
-
-        if self.mode in ("classification", "focal"):
-            return np.array(class_idx, dtype=np.int64)
-
-        if self.mode == "ordinal":
-            # Cumulative encoding: [1, 1, ..., 1, 0, ..., 0]
-            # Length = num_classes - 1  (thresholds between adjacent classes)
-            # class_idx=0 → all zeros, class_idx=max → all ones
-            target = np.zeros(self.num_classes - 1, dtype=np.float32)
-            target[:class_idx] = 1.0
-            return target
-
-        if self.mode == "regression":
-            return np.array(float(k), dtype=np.float32)
-
-        raise ValueError(f"Unknown mode '{self.mode}'")
-
-    @property
-    def target_dtype(self) -> torch.dtype:
-        if self.mode in ("classification", "focal"):
-            return torch.long
-        # distribution, ordinal, regression all use float32
-        return torch.float32
+    def target_transform(self, k: int | np.ndarray) -> np.ndarray:
+        """Encode k as a discretized Gaussian over the supported range (DLDL target)."""
+        k = min(max(int(np.asarray(k).item()), self.min_k), self.max_k)
+        classes = np.arange(self.num_classes, dtype=np.float32)
+        target = np.exp(-((classes - (k - self.min_k)) ** 2) / (2 * self.sigma**2))
+        return target / target.sum()
 
 
 @dataclass
@@ -96,7 +31,6 @@ class ModelConfig:
     n_layers: int = 4
     dropout: float = 0.3
     num_bins: int = 50
-    model_type: str = "default"
 
 
 @dataclass
@@ -119,19 +53,16 @@ class TrainingConfig:
 
 @dataclass
 class AppConfig:
-    head_config: BaseHeadConfig = field(default_factory=KEstimatorConfig)
+    head_config: HeadConfig = field(default_factory=HeadConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
 
-    # Dataset Constraints (Global / Fixed for now)
+    # Largest table seen during training; larger inputs are row-subsampled at inference
     max_rows: int = 2500
     max_cols: int = 200
 
     def to_dict(self) -> dict:
-        d = asdict(self)
-        # Ensure head_config.head_type is included if it was excluded by init=False but present
-        # asdict usually includes properties if they are fields.
-        return d
+        return asdict(self)
 
     def save(self, path: str | Path) -> None:
         """Save configuration to a JSON file."""
@@ -140,31 +71,13 @@ class AppConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> "AppConfig":
-        """Create AppConfig from dictionary."""
-        config = cls()
-
-        if "head_config" in data:
-            hc_data = data["head_config"]
-            h_type = hc_data.get("head_type", "k_estimator")
-
-            # Filter out fields with init=False (e.g. head_type) that
-            # are present in serialized dicts but can't be passed to __init__
-            if h_type == "k_estimator":
-                filtered = {k: v for k, v in hc_data.items() if k != "head_type"}
-                config.head_config = KEstimatorConfig(**filtered)
-            # Add other types here
-
-        if "model" in data:
-            config.model = ModelConfig(**data["model"])
-        if "training" in data:
-            config.training = TrainingConfig(**data["training"])
-
-        # Global fields
-        for k in ["max_rows", "max_cols"]:
-            if k in data:
-                setattr(config, k, data[k])
-
-        return config
+        """Create AppConfig from a dictionary, ignoring keys from older config versions."""
+        return cls(
+            head_config=_from_known_fields(HeadConfig, data.get("head_config", {})),
+            model=_from_known_fields(ModelConfig, data.get("model", {})),
+            training=_from_known_fields(TrainingConfig, data.get("training", {})),
+            **{k: data[k] for k in ("max_rows", "max_cols") if k in data},
+        )
 
     @classmethod
     def load(cls, path: str | Path) -> "AppConfig":
@@ -172,3 +85,8 @@ class AppConfig:
         with open(path) as f:
             data = json.load(f)
         return cls.from_dict(data)
+
+
+def _from_known_fields[T](cls: type[T], data: dict) -> T:
+    names = {f.name for f in fields(cls)}
+    return cls(**{k: v for k, v in data.items() if k in names})

@@ -109,7 +109,6 @@ uv run scripts/train_TabK.py \
     --n-head 8 \
     --n-layers 4 \
     --num-bins 50 \
-    --k-head-mode distribution \
     --sigma 0.5 \
     --lr 2e-4 \
     --epochs 20 \
@@ -138,8 +137,7 @@ TabK/
 ├── src/tabk/
 │   ├── architecture/            # Model, training, inference, heads
 │   │   ├── model.py             # DoubleInvariantTransformer backbone
-│   │   ├── heads/               # Prediction heads (DLDL, classification, focal, ordinal, regression)
-│   │   ├── ablation_models.py   # Ablation variants (w/o QFE, PMA, col-attn)
+│   │   ├── head.py              # DLDL head: distribution over k
 │   │   ├── train.py             # K-fold training loop with AMP & gradient accumulation
 │   │   ├── inference.py         # Ensemble inference (5-fold checkpoint averaging)
 │   │   ├── dataset.py           # HDF5 DataLake → in-memory PyTorch Dataset
@@ -158,7 +156,6 @@ TabK/
 │   ├── generate_datasets.py     # Synthetic prior generation
 │   ├── build_h5_from_raw.py     # NPZ → HDF5 conversion
 │   ├── train_TabK.py            # Training
-│   ├── create_subsampled_h5.py  # Training-set size ablation helper
 │   └── export_to_hub.py         # Convert checkpoints to the Hugging Face Hub format
 │
 └── tests/                       # Unit tests (pytest)
