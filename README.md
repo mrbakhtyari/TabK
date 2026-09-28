@@ -74,7 +74,7 @@ Or from the command line, for a CSV file with one row per sample:
 uv run tabk predict data.csv
 ```
 
-Features are standardized automatically. The pretrained model predicts *k* ∈ {2, …, 15} and was trained on tables with 100–2,500 rows and 2–200 features; larger tables are subsampled to 2,500 rows.
+Features are standardized automatically. The pretrained model predicts *k* ∈ {2, …, 15} and was trained on tables with 100–2,500 rows and 2–200 features. Inference uses all input rows.
 
 ---
 

@@ -15,7 +15,6 @@ from .utils import create_model
 logger = logging.getLogger(__name__)
 
 PRETRAINED_REPO_ID = "mrbakhtyari/TabK"
-SUBSAMPLE_SEED = 0
 
 
 class TabK:
@@ -78,7 +77,6 @@ class TabK:
         X = _validate_table(X)
         if scale:
             X = apply_standard_scaling(X)
-        X = _limit_rows(X, self.config.max_rows)
         rows, cols = X.shape
         if cols > self.config.max_cols:
             logger.warning(
@@ -101,7 +99,7 @@ class TabK:
 
 def _resolve_device(device: str | torch.device | None) -> torch.device:
     if device is None:
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return torch.device("cpu")
     return torch.device(device)
 
 
@@ -143,13 +141,3 @@ def _validate_table(X: np.ndarray) -> np.ndarray:
     if not np.isfinite(X).all():
         raise ValueError("Table must be numeric and contain no missing or infinite values")
     return X
-
-
-def _limit_rows(X: np.ndarray, max_rows: int) -> np.ndarray:
-    """Uniformly subsample rows of tables larger than the training range."""
-    rows = X.shape[0]
-    if rows <= max_rows:
-        return X
-    logger.warning("Table has %d rows; subsampling %d rows uniformly at random", rows, max_rows)
-    rng = np.random.default_rng(SUBSAMPLE_SEED)
-    return X[np.sort(rng.choice(rows, size=max_rows, replace=False))]

@@ -57,7 +57,7 @@ class AppConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
 
-    # Largest table seen during training; larger inputs are row-subsampled at inference
+    # Largest table seen during training
     max_rows: int = 2500
     max_cols: int = 200
 

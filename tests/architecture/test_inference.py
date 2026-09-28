@@ -6,6 +6,7 @@ from sklearn.datasets import load_iris
 
 from tabk import TabK
 from tabk.architecture import AppConfig, ModelConfig
+from tabk.architecture.inference import _resolve_device
 from tabk.architecture.utils import create_model
 
 
@@ -49,15 +50,22 @@ def test_output_is_invariant_to_row_and_column_permutations():
     )
 
 
-def test_tables_above_max_rows_are_subsampled(caplog):
+def test_default_inference_device_is_cpu_even_when_cuda_is_available(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+    assert _resolve_device(None) == torch.device("cpu")
+
+
+def test_tables_above_training_max_rows_are_used_in_full(caplog):
     model = _tiny_model(max_rows=30)
     table = np.random.default_rng(2).normal(size=(100, 4))
 
-    first = model.predict_proba(table)
-    second = model.predict_proba(table)
+    prediction = model.predict_proba(table)
+    model.config.max_rows = 100
+    full_prediction = model.predict_proba(table)
 
-    assert "subsampling 30 rows" in caplog.text
-    npt.assert_array_equal(first, second)
+    assert "subsampling" not in caplog.text
+    npt.assert_allclose(prediction, full_prediction, rtol=1e-6, atol=1e-7)
 
 
 def test_missing_values_are_rejected():
