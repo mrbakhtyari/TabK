@@ -250,7 +250,7 @@ def train_fold(
 
         if val_mae < best_val_mae:
             best_val_mae = val_mae
-            best_checkpoint_path = Path(output_dir) / f"checkpoint_fold_{fold_idx + 1}.pth"
+            best_checkpoint_path = checkpoint_dir / f"checkpoint_fold_{fold_idx + 1}.pth"
 
             save_checkpoint(
                 model,
