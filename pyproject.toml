@@ -1,6 +1,6 @@
 [project]
 name = "tabk"
-version = "1.0.0"
+version = "1.1.0"
 description = "TabK: Amortized Bayesian estimation of the number of clusters in tabular data."
 readme = "README.md"
 license = "MIT"
