@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://huggingface.co/mrbakhtyari/TabK"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Model-mrbakhtyari%2FTabK-FFD21E?style=flat-square"/></a>
   <a href="https://github.com/mrbakhtyari/TabK/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/mrbakhtyari/TabK/ci.yml?branch=main&style=flat-square&label=CI"/></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square"/></a>
   <img alt="Python 3.13+" src="https://img.shields.io/badge/Python-3.13%2B-3776AB?style=flat-square&logo=python&logoColor=white"/>
@@ -45,7 +46,7 @@
 ### Setup
 
 ```bash
-git clone https://github.com/mrbakhtyari/TabK.git
+git clone --depth 1 https://github.com/mrbakhtyari/TabK.git
 cd TabK
 uv sync
 ```
@@ -54,7 +55,7 @@ uv sync
 
 ## Inference
 
-The pretrained model (a 5-fold checkpoint ensemble) ships with the repository in `models/TabK`.
+The pretrained model (a 5-fold checkpoint ensemble) is hosted on the [Hugging Face Hub](https://huggingface.co/mrbakhtyari/TabK) and is downloaded automatically on first use.
 
 ```python
 from sklearn.datasets import load_iris
@@ -65,8 +66,8 @@ from tabk.utils import apply_standard_scaling
 X, _ = load_iris(return_X_y=True)
 X_scaled = apply_standard_scaling(X)
 
-# Load ensemble (5-fold checkpoints)
-ctx = load_inference_context("models/TabK")
+# Download and load the pretrained ensemble
+ctx = load_inference_context()
 
 # Predict k in a single forward pass
 predicted_k = predict_single(ctx, X_scaled)
@@ -119,7 +120,7 @@ uv run scripts/train_TabK.py \
     -v
 ```
 
-The trained ensemble can then be loaded with `load_inference_context("models/TabK_retrained")`.
+The trained ensemble can then be loaded with `load_inference_context("models/TabK_retrained")`. To publish it in the Hub format (safetensors weights plus `config.json`), run `uv run scripts/export_to_hub.py --model-dir models/TabK_retrained --out-dir hub/TabK_retrained`.
 
 ### Reproducibility
 
@@ -157,9 +158,9 @@ TabK/
 │   ├── generate_datasets.py     # Synthetic prior generation
 │   ├── build_h5_from_raw.py     # NPZ → HDF5 conversion
 │   ├── train_TabK.py            # Training
-│   └── create_subsampled_h5.py  # Training-set size ablation helper
+│   ├── create_subsampled_h5.py  # Training-set size ablation helper
+│   └── export_to_hub.py         # Convert checkpoints to the Hugging Face Hub format
 │
-├── models/TabK/                 # Pretrained checkpoints
 └── tests/                       # Unit tests (pytest)
 ```
 

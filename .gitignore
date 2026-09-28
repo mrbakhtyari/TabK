@@ -81,3 +81,7 @@ Thumbs.db
 
 # Misc
 .ruff_cache/
+
+# Trained model outputs
+models/
+hub/

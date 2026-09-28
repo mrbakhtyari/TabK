@@ -1,8 +1,5 @@
-from pathlib import Path
-
 import numpy as np
 import numpy.testing as npt
-import pytest
 import torch
 from sklearn.datasets import load_iris
 
@@ -15,8 +12,6 @@ from tabk.architecture import (
 )
 from tabk.architecture.utils import create_model
 from tabk.utils import apply_standard_scaling
-
-PRETRAINED_DIR = Path(__file__).resolve().parents[2] / "models" / "TabK"
 
 
 def _build_inference_context() -> dict:
@@ -53,9 +48,8 @@ def test_output_is_invariant_to_row_and_column_permutations():
     npt.assert_allclose(original, shuffled, rtol=1e-4, atol=1e-5)
 
 
-@pytest.mark.skipif(not PRETRAINED_DIR.is_dir(), reason="pretrained checkpoints not available")
 def test_pretrained_model_predicts_three_clusters_on_iris():
     X, _ = load_iris(return_X_y=True)
-    ctx = load_inference_context(PRETRAINED_DIR, device="cpu")
+    ctx = load_inference_context(device="cpu")
 
     assert predict_single(ctx, apply_standard_scaling(X)) == 3

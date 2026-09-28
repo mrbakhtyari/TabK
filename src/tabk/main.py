@@ -9,8 +9,8 @@ def main():
     X, _ = load_iris(return_X_y=True)
     X_scaled = apply_standard_scaling(X)
 
-    # Load ensemble (5-fold checkpoints)
-    ctx = load_inference_context("models/TabK")
+    # Download the pretrained 5-fold ensemble from the Hugging Face Hub
+    ctx = load_inference_context()
 
     # Predict k in a single forward pass
     predicted_k = predict_single(ctx, X_scaled)
