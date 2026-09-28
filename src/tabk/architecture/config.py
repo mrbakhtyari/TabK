@@ -26,8 +26,8 @@ class HeadConfig:
 
 @dataclass
 class ModelConfig:
-    d_model: int = 64
-    n_head: int = 4
+    d_model: int = 256
+    n_head: int = 8
     n_layers: int = 4
     dropout: float = 0.3
     num_bins: int = 50
@@ -37,7 +37,7 @@ class ModelConfig:
 class TrainingConfig:
     batch_size: int = 16
     accum_steps: int = 8
-    learning_rate: float = 1e-4
+    learning_rate: float = 2e-4
     weight_decay: float = 1e-3
     epochs: int = 20
     k_folds: int = 5

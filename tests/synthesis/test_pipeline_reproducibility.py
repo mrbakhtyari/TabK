@@ -13,13 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 def run_generation_cli(output_dir: Path, n_configs: int, seed: int, n_repeats: int = 1) -> float:
-    """
-    Runs the generation script via subprocess. Returns execution time.
-    """
+    """Run `tabk generate` in a subprocess and return its duration."""
     cmd = [
         sys.executable,
-        "scripts/generate_datasets.py",
-        "--output-dir",
+        "-m",
+        "tabk",
+        "generate",
+        "--out",
         str(output_dir),
         "--n-configs",
         str(n_configs),

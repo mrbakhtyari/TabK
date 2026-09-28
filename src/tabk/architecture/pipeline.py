@@ -24,14 +24,7 @@ def run_training_pipeline(
     config: AppConfig,
     h5_filename: str,
 ) -> tuple[list[float], list[dict], list[float]]:
-    """Complete training pipeline backed by the unified HDF5 DataLake.
-
-    Args:
-        data_dir: Root directory containing the HDF5 file.
-        output_dir: Directory for checkpoints, plots, and history.
-        config: Application configuration.
-        h5_filename: Name of the HDF5 DataLake file inside data_dir.
-    """
+    """Train the k-fold ensemble from data_dir/h5_filename and write results to output_dir."""
     start_time = time.time()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -42,9 +35,7 @@ def run_training_pipeline(
 
     h5_path = data_dir / h5_filename
     if not h5_path.is_file():
-        raise FileNotFoundError(
-            f"HDF5 DataLake not found at: {h5_path}. Run scripts/build_h5_from_raw.py first."
-        )
+        raise FileNotFoundError(f"{h5_path} not found. Run `tabk generate` first.")
 
     logger.info(f"\nStarting {config.training.k_folds}-fold training from {h5_path}...")
     training_start_time = time.time()

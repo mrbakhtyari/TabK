@@ -22,6 +22,9 @@ dependencies = [
     "tqdm>=4.67.1",
 ]
 
+[project.scripts]
+tabk = "tabk.cli:main"
+
 [project.urls]
 Repository = "https://github.com/mrbakhtyari/TabK"
 

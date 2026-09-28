@@ -59,67 +59,35 @@ The pretrained model (a 5-fold checkpoint ensemble) is hosted on the [Hugging Fa
 
 ```python
 from sklearn.datasets import load_iris
-from tabk.architecture import load_inference_context, predict_single
-from tabk.utils import apply_standard_scaling
+from tabk import TabK
 
-# Load the Iris dataset
 X, _ = load_iris(return_X_y=True)
-X_scaled = apply_standard_scaling(X)
 
-# Download and load the pretrained ensemble
-ctx = load_inference_context()
-
-# Predict k in a single forward pass
-predicted_k = predict_single(ctx, X_scaled)
-print(f"Predicted number of clusters: {predicted_k}")  # expected: 3
+model = TabK.from_pretrained()
+print(model.predict(X))        # 3
+print(model.predict_proba(X))  # probability of each k in model.k_values
 ```
 
-The same example runs with `uv run python -m tabk.main`.
+Or from the command line, for a CSV file with one row per sample:
 
-The pretrained model predicts *k* ∈ {2, …, 15} and was trained on tables with 100–2,500 rows and 2–200 features.
+```bash
+uv run tabk predict data.csv
+```
+
+Features are standardized automatically. The pretrained model predicts *k* ∈ {2, …, 15} and was trained on tables with 100–2,500 rows and 2–200 features; larger tables are subsampled to 2,500 rows.
 
 ---
 
 ## Training
 
-### 1. Generate Synthetic Training Data
-
 ```bash
-uv run scripts/generate_datasets.py \
-    --n-configs 40000 \
-    --k-min 2 --k-max 15 \
-    --n-low 100 --n-high 2500 \
-    --d-low 2 --d-high 200 \
-    --output-dir datasets/synthetic_n40000_r1
+uv run tabk generate   # synthetic training data  -> datasets/synthetic
+uv run tabk train      # 5-fold ensemble           -> models/TabK_retrained
 ```
 
-### 2. Build the HDF5 DataLake
+The defaults reproduce the paper's setup; run `uv run tabk <command> --help` for all options. Use the trained model with `TabK.from_pretrained("models/TabK_retrained")` or `tabk predict data.csv --model models/TabK_retrained`.
 
-```bash
-uv run scripts/build_h5_from_raw.py \
-    --data-dir datasets/synthetic_n40000_r1 \
-    --test-ratio 0.1 -vv
-```
-
-### 3. Train TabK
-
-```bash
-uv run scripts/train_TabK.py \
-    --d-model 256 \
-    --n-head 8 \
-    --n-layers 4 \
-    --num-bins 50 \
-    --sigma 0.5 \
-    --lr 2e-4 \
-    --epochs 20 \
-    --k-folds 5 \
-    --data-dir datasets \
-    --h5-filename synthetic_n40000_r1.h5 \
-    --output-dir models/TabK_retrained \
-    -v
-```
-
-The trained ensemble can then be loaded with `load_inference_context("models/TabK_retrained")`. To publish it in the Hub format (safetensors weights plus `config.json`), run `uv run scripts/export_to_hub.py --model-dir models/TabK_retrained --out-dir hub/TabK_retrained`.
+To publish it in the Hugging Face Hub format (safetensors weights plus `config.json`), run `uv run tabk export`.
 
 ### Reproducibility
 
@@ -135,14 +103,16 @@ The trained ensemble can then be loaded with `load_inference_context("models/Tab
 ```
 TabK/
 ├── src/tabk/
-│   ├── architecture/            # Model, training, inference, heads
+│   ├── cli.py                   # `tabk` command: predict, generate, train, export
+│   ├── architecture/            # Model, training, inference
 │   │   ├── model.py             # DoubleInvariantTransformer backbone
 │   │   ├── head.py              # DLDL head: distribution over k
+│   │   ├── inference.py         # TabK: ensemble loading and prediction
 │   │   ├── train.py             # K-fold training loop with AMP & gradient accumulation
-│   │   ├── inference.py         # Ensemble inference (5-fold checkpoint averaging)
+│   │   ├── pipeline.py          # End-to-end training orchestration
 │   │   ├── dataset.py           # HDF5 DataLake → in-memory PyTorch Dataset
 │   │   ├── config.py            # Dataclass-based configuration
-│   │   └── pipeline.py          # End-to-end training orchestration
+│   │   └── export.py            # Conversion to the Hugging Face Hub format
 │   │
 │   ├── synthesis/               # Synthetic data generation (generative prior)
 │   │   ├── strategies.py        # Geometric generators (see paper Section B)
@@ -151,12 +121,6 @@ TabK/
 │   │   └── registry.py          # Strategy registry & hyperparameter samplers
 │   │
 │   └── utils/                   # Preprocessing, logging and progress helpers
-│
-├── scripts/                     # Command-line entry points
-│   ├── generate_datasets.py     # Synthetic prior generation
-│   ├── build_h5_from_raw.py     # NPZ → HDF5 conversion
-│   ├── train_TabK.py            # Training
-│   └── export_to_hub.py         # Convert checkpoints to the Hugging Face Hub format
 │
 └── tests/                       # Unit tests (pytest)
 ```

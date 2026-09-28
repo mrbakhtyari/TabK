@@ -1,6 +1,5 @@
 import json
 import logging
-import time
 from pathlib import Path
 
 import numpy as np
@@ -8,7 +7,9 @@ import torch
 from huggingface_hub import snapshot_download
 from safetensors.torch import load_file
 
+from ..utils import apply_standard_scaling
 from .config import AppConfig
+from .model import DoubleInvariantTransformer
 from .utils import create_model
 
 logger = logging.getLogger(__name__)
@@ -17,64 +18,85 @@ PRETRAINED_REPO_ID = "mrbakhtyari/TabK"
 SUBSAMPLE_SEED = 0
 
 
-def load_inference_context(
-    model: str | Path = PRETRAINED_REPO_ID,
-    device: str | torch.device | None = None,
-    revision: str | None = None,
-) -> dict:
-    """Load ensemble models and return an inference artifact bundle.
+class TabK:
+    """Ensemble of trained TabK models that estimates the number of clusters in a table."""
 
-    Args:
-        model: A local directory (training output with ``checkpoints/*.pth``, or an
-            exported folder with ``config.json`` and ``*.safetensors``) or a
-            Hugging Face Hub repo id. Defaults to the pretrained TabK ensemble.
-        device: Target device. Defaults to CUDA when available.
-        revision: Hub revision (branch, tag or commit) when ``model`` is a repo id.
-    """
-    model_dir = Path(model)
-    if not model_dir.is_dir():
-        model_dir = Path(snapshot_download(repo_id=str(model), revision=revision))
+    def __init__(
+        self,
+        models: list[DoubleInvariantTransformer],
+        config: AppConfig,
+        device: torch.device,
+    ):
+        self.models = models
+        self.config = config
+        self.device = device
 
-    if (model_dir / "config.json").is_file():
-        models = _load_safetensors_models(model_dir, device)
-    else:
-        models = _load_models(model_dir, device)
-    config = models[0].app_config
-    runtime_device = next(models[0].parameters()).device
+    @classmethod
+    def from_pretrained(
+        cls,
+        model: str | Path = PRETRAINED_REPO_ID,
+        device: str | torch.device | None = None,
+        revision: str | None = None,
+    ) -> "TabK":
+        """Load from a Hub repo id, an exported folder, or a training output directory."""
+        device = _resolve_device(device)
+        model_dir = Path(model)
+        if not model_dir.is_dir():
+            model_dir = Path(snapshot_download(repo_id=str(model), revision=revision))
 
-    return {
-        "models": models,
-        "config": config,
-        "device": runtime_device,
-    }
+        if (model_dir / "config.json").is_file():
+            config, state_dicts = _read_exported(model_dir)
+        else:
+            config, state_dicts = _read_checkpoints(model_dir)
 
+        models = []
+        for state_dict in state_dicts:
+            net = create_model(config)
+            net.load_state_dict(state_dict)
+            models.append(net.to(device).eval())
 
-def _load_models(
-    model_dir: str | Path,
-    device: str | torch.device | None = None,
-) -> list[torch.nn.Module]:
-    """Load a training output directory: one ``checkpoints/*.pth`` file per fold."""
-    model_files = sorted((Path(model_dir) / "checkpoints").glob("*.pth"))
-    if not model_files:
-        raise FileNotFoundError(f"No .pth checkpoints found in {Path(model_dir) / 'checkpoints'}")
+        logger.info("Loaded %d models from %s to %s", len(models), model_dir, device)
+        return cls(models, config, device)
 
-    device = _resolve_device(device)
-    models: list[torch.nn.Module] = []
-    for model_path in model_files:
-        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-        if not checkpoint.get("config"):
-            raise ValueError(f"{model_path} has no stored config")
+    @property
+    def k_values(self) -> np.ndarray:
+        """The values of k that the model can predict, aligned with predict_proba."""
+        head = self.config.head_config
+        return np.arange(head.min_k, head.max_k + 1)
 
-        config = AppConfig.from_dict(checkpoint["config"])
-        config.training.device = device.type
-        model = create_model(config)
-        model.load_state_dict(checkpoint["model_state_dict"])
-        model.to(device).eval()
-        model.app_config = config
-        models.append(model)
+    def predict(self, X: np.ndarray, scale: bool = True) -> int:
+        """Estimate the number of clusters in X (rows are samples, columns are features)."""
+        log_probs = self._ensemble_log_probs(X, scale)
+        return int(self.models[0].head.predict_k(log_probs).item())
 
-    logger.info("Loaded %d models from %s to %s", len(models), model_dir, device)
-    return models
+    def predict_proba(self, X: np.ndarray, scale: bool = True) -> np.ndarray:
+        """Probability of each value in k_values."""
+        probs = self._ensemble_log_probs(X, scale).exp().squeeze(0).cpu().numpy()
+        return probs / probs.sum()
+
+    def _ensemble_log_probs(self, X: np.ndarray, scale: bool) -> torch.Tensor:
+        X = _validate_table(X)
+        if scale:
+            X = apply_standard_scaling(X)
+        X = _limit_rows(X, self.config.max_rows)
+        rows, cols = X.shape
+        if cols > self.config.max_cols:
+            logger.warning(
+                "Table has %d columns; the model was trained on at most %d",
+                cols,
+                self.config.max_cols,
+            )
+
+        x = torch.from_numpy(X).float().unsqueeze(0).to(self.device)
+        row_mask = torch.zeros(1, rows, dtype=torch.bool, device=self.device)
+        col_mask = torch.zeros(1, cols, dtype=torch.bool, device=self.device)
+
+        outputs = []
+        with torch.no_grad():
+            for model in self.models:
+                with torch.amp.autocast("cuda", enabled=self.device.type == "cuda"):
+                    outputs.append(model(x, row_mask, col_mask))
+        return torch.stack(outputs).mean(dim=0)
 
 
 def _resolve_device(device: str | torch.device | None) -> torch.device:
@@ -83,122 +105,51 @@ def _resolve_device(device: str | torch.device | None) -> torch.device:
     return torch.device(device)
 
 
-def _load_safetensors_models(
-    model_dir: Path,
-    device: str | torch.device | None = None,
-) -> list[torch.nn.Module]:
-    """Load an exported ensemble: one shared ``config.json`` and one ``*.safetensors`` per fold."""
-    device = _resolve_device(device)
+def _read_exported(model_dir: Path) -> tuple[AppConfig, list[dict]]:
+    """Read an exported ensemble: one shared config.json and one *.safetensors file per fold."""
     with open(model_dir / "config.json", encoding="utf-8") as f:
-        config_dict = json.load(f)
+        config = AppConfig.from_dict(json.load(f))
 
     model_files = sorted(model_dir.glob("*.safetensors"))
     if not model_files:
         raise FileNotFoundError(f"No .safetensors files found in {model_dir}")
-
-    models: list[torch.nn.Module] = []
-    for model_path in model_files:
-        config = AppConfig.from_dict(config_dict)
-        config.training.device = device.type
-        model = create_model(config)
-        model.load_state_dict(load_file(model_path))
-        model.to(device).eval()
-        model.app_config = config
-        models.append(model)
-
-    logger.info("Loaded %d models from %s to %s", len(models), model_dir, device)
-    return models
+    return config, [load_file(path) for path in model_files]
 
 
-def _decode_predictions(models: list[torch.nn.Module], avg_output: torch.Tensor) -> np.ndarray:
-    return models[0].head.predict_k(avg_output).cpu().numpy()
+def _read_checkpoints(model_dir: Path) -> tuple[AppConfig, list[dict]]:
+    """Read a training output directory: one checkpoints/*.pth file per fold."""
+    model_files = sorted((model_dir / "checkpoints").glob("*.pth"))
+    if not model_files:
+        raise FileNotFoundError(f"No .pth checkpoints found in {model_dir / 'checkpoints'}")
+
+    config_dicts, state_dicts = [], []
+    for path in model_files:
+        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+        if not checkpoint.get("config"):
+            raise ValueError(f"{path} has no stored config")
+        config_dicts.append(checkpoint["config"])
+        state_dicts.append(checkpoint["model_state_dict"])
+
+    configs = [AppConfig.from_dict(d) for d in config_dicts]
+    if any(c.model != configs[0].model or c.head_config != configs[0].head_config for c in configs):
+        raise ValueError(f"Checkpoints in {model_dir} were trained with different configs")
+    return configs[0], state_dicts
 
 
-def _limit_rows(table_data: np.ndarray, max_rows: int) -> np.ndarray:
+def _validate_table(X: np.ndarray) -> np.ndarray:
+    X = np.asarray(X, dtype=np.float64)
+    if X.ndim != 2:
+        raise ValueError(f"Expected a 2D table, got shape {X.shape}")
+    if not np.isfinite(X).all():
+        raise ValueError("Table must be numeric and contain no missing or infinite values")
+    return X
+
+
+def _limit_rows(X: np.ndarray, max_rows: int) -> np.ndarray:
     """Uniformly subsample rows of tables larger than the training range."""
-    rows = table_data.shape[0]
+    rows = X.shape[0]
     if rows <= max_rows:
-        return table_data
+        return X
     logger.warning("Table has %d rows; subsampling %d rows uniformly at random", rows, max_rows)
     rng = np.random.default_rng(SUBSAMPLE_SEED)
-    return table_data[np.sort(rng.choice(rows, size=max_rows, replace=False))]
-
-
-def forward_single(inference_context: dict, table_data: np.ndarray) -> tuple[torch.Tensor, float]:
-    """Run ensemble forward pass for a single table and return averaged output tensor
-    along with inference time in milliseconds (measures only the model forward
-    passes inside the `torch.no_grad()` block).
-    """
-    device: torch.device = inference_context["device"]
-    models: list[torch.nn.Module] = inference_context["models"]
-    config: AppConfig = inference_context["config"]
-
-    table_data = _limit_rows(table_data, config.max_rows)
-    rows, cols = table_data.shape
-    if cols > config.max_cols:
-        logger.warning(
-            "Table has %d columns; the model was trained on at most %d", cols, config.max_cols
-        )
-
-    tensor_data = torch.from_numpy(table_data).float().unsqueeze(0).to(device)
-    r_mask = torch.zeros(1, rows, dtype=torch.bool, device=device)
-    c_mask = torch.zeros(1, cols, dtype=torch.bool, device=device)
-
-    all_outputs = []
-    start = time.perf_counter()
-    with torch.no_grad():
-        for model in models:
-            with torch.amp.autocast("cuda", enabled=(device.type == "cuda")):
-                out = model(tensor_data, r_mask, c_mask)
-                all_outputs.append(out)
-    end = time.perf_counter()
-
-    avg = torch.stack(all_outputs).mean(dim=0)
-    inference_time_ms = (end - start) * 1000.0
-    return avg, float(inference_time_ms)
-
-
-def _build_target_tensor(inference_context: dict, target_value: float | int) -> torch.Tensor:
-    config: AppConfig = inference_context["config"]
-    target = config.head_config.target_transform(int(target_value))
-    return torch.tensor(target[None], dtype=torch.float32, device=inference_context["device"])
-
-
-def _prediction_to_scalar(prediction: np.ndarray) -> float | list:
-    if prediction.size == 1:
-        return float(np.squeeze(prediction))
-    pred_val = prediction.tolist()
-    if isinstance(pred_val, list) and len(pred_val) == 1:
-        return float(pred_val[0])
-    return pred_val
-
-
-def run_single_inference(
-    inference_context: dict,
-    table_data: np.ndarray,
-    target_value: float | int | None = None,
-) -> dict:
-    """Run single-table inference and return prediction, raw output, and optional metrics."""
-    avg_output, inference_time_ms = forward_single(inference_context, table_data)
-    models: list[torch.nn.Module] = inference_context["models"]
-    decoded_prediction = _decode_predictions(models, avg_output)
-    head_metrics = None
-
-    if target_value is not None and np.isfinite(float(target_value)):
-        target_tensor = _build_target_tensor(inference_context, target_value)
-        head_metrics = models[0].head.compute_metrics(avg_output, target_tensor)
-
-    raw_output = np.squeeze(avg_output.detach().cpu().numpy()).tolist()
-
-    return {
-        "prediction": decoded_prediction,
-        "predicted_value": _prediction_to_scalar(decoded_prediction),
-        "inference_time_ms": inference_time_ms,
-        "raw_output": raw_output,
-        "head_metrics": head_metrics,
-    }
-
-
-def predict_single(inference_context: dict, table_data: np.ndarray) -> np.ndarray:
-    """Run single-table inference and return only decoded prediction."""
-    return run_single_inference(inference_context, table_data)["prediction"][0]
+    return X[np.sort(rng.choice(rows, size=max_rows, replace=False))]
