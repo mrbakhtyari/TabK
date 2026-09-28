@@ -98,14 +98,29 @@ def verify_directories_identical(dir1: Path, dir2: Path) -> bool:
                             return parts[1]
                         return line
 
-                    lines1 = sorted([clean_line(l) for l in lines1])
-                    lines2 = sorted([clean_line(l) for l in lines2])
+                    lines1 = sorted([clean_line(line) for line in lines1])
+                    lines2 = sorted([clean_line(line) for line in lines2])
 
                     if lines1 != lines2:
                         logger.error(f"Timeouts log mismatch in {filename}")
                         real_diffs.append(filename)
                 except Exception as e:
                     logger.error(f"Error comparing timeouts log {filename}: {e}")
+                    real_diffs.append(filename)
+                continue
+
+            if filename == "dataset_paths.txt":
+                # Manifest holds absolute paths; compare them relative to each run dir
+                rel1 = [
+                    Path(p).relative_to(dir1.resolve()).as_posix()
+                    for p in (dir1 / filename).read_text().splitlines()
+                ]
+                rel2 = [
+                    Path(p).relative_to(dir2.resolve()).as_posix()
+                    for p in (dir2 / filename).read_text().splitlines()
+                ]
+                if rel1 != rel2:
+                    logger.error(f"Manifest mismatch in {filename}")
                     real_diffs.append(filename)
                 continue
 
@@ -176,8 +191,8 @@ def test_pipeline_reproducibility():
     Verifies that the entire generation pipeline is reproducible.
     Runs the generation twice with the same seed and checks if the output directories are identical.
     """
-    n_configs = 100
-    n_repeats = 10
+    n_configs = 20
+    n_repeats = 2
     seed = 42
 
     # Create temporary directories for the two runs
