@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
-StrategyConfig = dict[str, object]
+StrategyConfig = dict[str, Any]
 
 
 @dataclass(frozen=True)

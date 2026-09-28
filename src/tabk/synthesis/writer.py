@@ -56,7 +56,7 @@ class NPZWriter:
             seeds[f"rep{rep_idx:0{rep_width}d}"] = int(rep["seed"])
             strat_cfgs[f"rep{rep_idx:0{rep_width}d}"] = to_jsonable(rep["strategy_config"])
 
-        np.savez_compressed(npz_path, **save_dict)
+        np.savez_compressed(npz_path, **save_dict)  # pyright: ignore[reportArgumentType]
 
         meta = {
             "created_at": datetime.now().isoformat() + "Z",

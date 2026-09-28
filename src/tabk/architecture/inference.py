@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import torch
@@ -9,6 +10,7 @@ from safetensors.torch import load_file
 
 from ..utils import apply_standard_scaling
 from .config import AppConfig
+from .head import KHead
 from .model import DoubleInvariantTransformer
 from .utils import create_model
 
@@ -66,7 +68,7 @@ class TabK:
     def predict(self, X: np.ndarray, scale: bool = True) -> int:
         """Estimate the number of clusters in X (rows are samples, columns are features)."""
         log_probs = self._ensemble_log_probs(X, scale)
-        return int(self.models[0].head.predict_k(log_probs).item())
+        return int(cast(KHead, self.models[0].head).predict_k(log_probs).item())
 
     def predict_proba(self, X: np.ndarray, scale: bool = True) -> np.ndarray:
         """Probability of each value in k_values."""

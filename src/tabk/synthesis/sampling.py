@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 from scipy.stats import qmc
@@ -154,5 +155,5 @@ def pyclugen_sampler(rng: np.random.Generator, num_dims: int) -> dict:
 
 def lhs(n: int, d: int, rng: np.random.Generator) -> np.ndarray:
     """Latin Hypercube Sampling."""
-    sampler = qmc.LatinHypercube(d=d, seed=rng)
+    sampler = cast(Any, qmc.LatinHypercube)(d=d, seed=rng)
     return sampler.random(n=n)

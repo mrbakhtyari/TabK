@@ -3,7 +3,7 @@ import io
 import random
 import sys
 from dataclasses import asdict, is_dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -50,5 +50,5 @@ def to_jsonable(obj: Any):
     if isinstance(obj, dict):
         return {str(k): to_jsonable(v) for k, v in obj.items()}
     if is_dataclass(obj):
-        return to_jsonable(asdict(obj))
+        return to_jsonable(asdict(cast(Any, obj)))
     return str(obj)

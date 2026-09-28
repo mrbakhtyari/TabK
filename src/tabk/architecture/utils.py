@@ -48,7 +48,7 @@ def save_checkpoint(
     loss,
     path,
     fold_idx=None,
-    config: AppConfig = None,
+    config: AppConfig | None = None,
     additional_info=None,
 ):
     """Save model checkpoint with comprehensive metadata."""

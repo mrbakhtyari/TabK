@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import Any, cast
 
 import h5py
 import numpy as np
@@ -16,9 +17,10 @@ def scan_h5_datalake(h5_path: Path | str) -> dict[str, list[dict]]:
     """Single-pass scan: reads all sample IDs and their metadata, grouped by split."""
     splits: dict[str, list[dict]] = {}
     with h5py.File(h5_path, "r") as h5f:
-        root = h5f["datasets"]
+        root = cast(h5py.Group, h5f["datasets"])
         for sid in root:
-            attrs = dict(root[sid].attrs)
+            group = cast(h5py.Group, root[sid])
+            attrs: dict[str, Any] = dict(group.attrs)
             attrs["sample_id"] = sid
             split = attrs.get("split", "train")
             splits.setdefault(split, []).append(attrs)
@@ -45,13 +47,16 @@ class H5Dataset(Dataset):
         write_progress_line(f"Caching data into RAM | start | samples: {total_samples}")
 
         with h5py.File(str(h5_path), "r") as h5f:
-            root = h5f["datasets"]
+            root = cast(h5py.Group, h5f["datasets"])
             for sid in sample_ids:
-                group = root[sid]
-                self.features.append(group["normalized_features"][:])
+                group = cast(h5py.Group, root[sid])
+                features = cast(h5py.Dataset, group["normalized_features"])
+                self.features.append(features[:])
 
                 # Precompute transform once (not per __getitem__)
-                self.targets.append(target_transform(group.attrs["k_value"]))
+                self.targets.append(
+                    target_transform(cast(int | np.ndarray, group.attrs["k_value"]))
+                )
 
         write_progress_line(f"Caching data into RAM | end | cached: {len(self.features)} samples")
 

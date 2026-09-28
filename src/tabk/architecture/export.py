@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import cast
 
 import torch
 from safetensors.torch import save_file
@@ -26,6 +27,6 @@ def export_for_hub(model_dir: Path, out_dir: Path) -> int:
         save_file(state_dict, out_dir / f"fold_{i}.safetensors")
 
     with open(out_dir / "config.json", "w", encoding="utf-8") as f:
-        json.dump(AppConfig.from_dict(config).to_dict(), f, indent=2)
+        json.dump(AppConfig.from_dict(cast(dict, config)).to_dict(), f, indent=2)
 
     return len(checkpoints)

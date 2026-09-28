@@ -2,6 +2,7 @@ import logging
 import math
 import time
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import torch
@@ -13,6 +14,7 @@ from tqdm import tqdm
 from ..utils.progress import is_interactive_stream, write_progress_line
 from .config import AppConfig
 from .dataset import H5Dataset, collate_batch, scan_h5_datalake
+from .head import KHead
 from .utils import create_model, save_checkpoint
 
 logger = logging.getLogger(__name__)
@@ -74,7 +76,7 @@ def train_one_epoch(
 
     device = config.training.torch_device
     use_amp = device.type == "cuda"
-    use_scaler = scaler is not None and scaler.is_enabled()
+    active_scaler = scaler if scaler is not None and scaler.is_enabled() else None
     accum_steps = config.training.accum_steps
     num_batches = len(loader)
     last_window_start = num_batches - (num_batches % accum_steps or accum_steps)
@@ -102,21 +104,21 @@ def train_one_epoch(
         window = num_batches - last_window_start if i >= last_window_start else accum_steps
         scaled_loss = loss / window
 
-        if use_scaler:
-            scaler.scale(scaled_loss).backward()
+        if active_scaler is not None:
+            active_scaler.scale(scaled_loss).backward()
         else:
             scaled_loss.backward()
 
         is_step = (i + 1) % accum_steps == 0 or (i + 1) == num_batches
 
         if is_step:
-            if use_scaler:
-                scaler.unscale_(optimizer)
+            if active_scaler is not None:
+                active_scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                scale_before = scaler.get_scale()
-                scaler.step(optimizer)
-                scaler.update()
-                skip_lr_sched = scale_before > scaler.get_scale()
+                scale_before = active_scaler.get_scale()
+                active_scaler.step(optimizer)
+                active_scaler.update()
+                skip_lr_sched = scale_before > active_scaler.get_scale()
             else:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
@@ -182,7 +184,7 @@ def train_fold(
         milestones=[warmup_steps],
     )
 
-    criterion = model.head.loss_fn().to(device)
+    criterion = cast(KHead, model.head).loss_fn().to(device)
 
     # BF16 on Ampere+ (no scaler needed); FP16+GradScaler on older GPUs
     use_bf16 = device.type == "cuda" and torch.cuda.is_bf16_supported()
@@ -310,12 +312,19 @@ def execute_kfold_training(
         val_subset = Subset(full_dataset, val_idx.tolist())
 
         pin_memory = config.training.torch_device.type == "cuda"
-        common = dict(collate_fn=collate_batch, pin_memory=pin_memory)
         train_loader = DataLoader(
-            train_subset, batch_size=config.training.batch_size, shuffle=True, **common
+            train_subset,
+            batch_size=config.training.batch_size,
+            shuffle=True,
+            collate_fn=collate_batch,
+            pin_memory=pin_memory,
         )
         val_loader = DataLoader(
-            val_subset, batch_size=config.training.batch_size, shuffle=False, **common
+            val_subset,
+            batch_size=config.training.batch_size,
+            shuffle=False,
+            collate_fn=collate_batch,
+            pin_memory=pin_memory,
         )
 
         best_val_mae, history = train_fold(

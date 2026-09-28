@@ -1,6 +1,7 @@
 import json
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -88,5 +89,5 @@ class AppConfig:
 
 
 def _from_known_fields[T](cls: type[T], data: dict) -> T:
-    names = {f.name for f in fields(cls)}
+    names = {f.name for f in fields(cast(Any, cls))}
     return cls(**{k: v for k, v in data.items() if k in names})

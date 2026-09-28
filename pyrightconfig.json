@@ -4,10 +4,12 @@
   ],
   "venvPath": ".",
   "venv": ".venv",
+  "pythonVersion": "3.13",
   "extraPaths": [
     "src"
   ],
-  "typeCheckingMode": "off",
+  "typeCheckingMode": "basic",
+  "reportPrivateImportUsage": false,
   "reportMissingImports": true,
   "exclude": [
     ".venv",
