@@ -5,12 +5,14 @@ import queue
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from multiprocessing.queues import Queue
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
 from .config_generator import generate_configs
-from .core import DataGenerator
+from .core import ClusterConfig, DataGenerator, StrategyConfig
 from .registry import StrategySpec, default_registry
 from .reporting import (
     config_report,
@@ -44,7 +46,7 @@ class GenerationSettings:
     d_high: int = 200
 
 
-def _worker_loop(input_q: multiprocessing.Queue, output_q: multiprocessing.Queue):
+def _worker_loop(input_q: Queue[Any], output_q: Queue[Any]):
     """Run queued generation tasks and send back results until a stop signal."""
     while True:
         try:
@@ -71,6 +73,60 @@ def _worker_loop(input_q: multiprocessing.Queue, output_q: multiprocessing.Queue
             except Exception:
                 pass
             break
+
+
+class _GenerationRunner:
+    """Run datasets in a worker when timeouts are enabled, otherwise inline."""
+
+    def __init__(self, timeout: float):
+        self.timeout = timeout
+        self.worker: multiprocessing.Process | None = None
+        self.input_q: Queue[Any] | None = None
+        self.output_q: Queue[Any] | None = None
+        if timeout > 0:
+            self.start()
+
+    def start(self) -> None:
+        self.input_q = multiprocessing.Queue()
+        self.output_q = multiprocessing.Queue()
+        self.worker = multiprocessing.Process(
+            target=_worker_loop, args=(self.input_q, self.output_q)
+        )
+        self.worker.daemon = True
+        self.worker.start()
+
+    def stop(self) -> None:
+        if self.worker and self.worker.is_alive():
+            assert self.input_q is not None
+            self.input_q.put(None)
+            self.worker.join(timeout=1)
+            if self.worker.is_alive():
+                self.worker.terminate()
+
+    def restart(self) -> None:
+        assert self.worker is not None
+        self.worker.terminate()
+        self.worker.join()
+        self.start()
+
+    def generate(
+        self,
+        spec: StrategySpec,
+        cfg: ClusterConfig,
+        strategy_config: StrategyConfig,
+        seed: int,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        if self.timeout > 0:
+            assert self.input_q is not None and self.output_q is not None
+            self.input_q.put((spec.strategy_cls, cfg, strategy_config, seed))
+            res_type, res_payload = self.output_q.get(timeout=self.timeout)
+            if res_type == "ok":
+                return res_payload
+            raise res_payload
+
+        with suppress_output():
+            gen = DataGenerator(spec.strategy_cls(cfg))
+            return gen.generate_dataset(strategy_config, seed=seed)
 
 
 def run_generation(
@@ -113,29 +169,7 @@ def run_generation(
     # Generate report for the configs
     config_report(cluster_configs, settings.output_dir, seed=settings.master_seed)
 
-    # Worker Management
-    worker = None
-    input_q = None
-    output_q = None
-
-    def start_worker():
-        nonlocal worker, input_q, output_q
-        input_q = multiprocessing.Queue()
-        output_q = multiprocessing.Queue()
-        worker = multiprocessing.Process(target=_worker_loop, args=(input_q, output_q))
-        worker.daemon = True
-        worker.start()
-
-    def stop_worker():
-        nonlocal worker
-        if worker and worker.is_alive():
-            input_q.put(None)
-            worker.join(timeout=1)
-            if worker.is_alive():
-                worker.terminate()
-
-    if settings.timeout > 0:
-        start_worker()
+    runner = _GenerationRunner(settings.timeout)
 
     try:
         for cfg_idx, (cfg, cfg_ss) in enumerate(zip(cluster_configs, cfg_seed_sequences)):
@@ -162,43 +196,24 @@ def run_generation(
                         strategy_config = spec.sampler(rep_rng, cfg)
                         dataset_seed = int(rep_ss.generate_state(1)[0])
 
-                        X, y = None, None
-
-                        if settings.timeout > 0:
-                            # IPC Execution
-                            task = (spec.strategy_cls, cfg, strategy_config, dataset_seed)
-                            input_q.put(task)
-
-                            try:
-                                res_type, res_payload = output_q.get(timeout=settings.timeout)
-                                if res_type == "ok":
-                                    X, y = res_payload
-                                else:
-                                    raise res_payload  # Re-raise exception from worker
-                            except queue.Empty:
-                                logger.warning(
-                                    f"TIMEOUT ({settings.timeout}s): Killing {spec.name} "
-                                    f"cfg #{cfg_idx} rep #{rep_i} "
-                                    f"(k={cfg.num_clusters}, n={cfg.num_samples}, "
-                                    f"d={cfg.num_dimensions})"
-                                )
-                                timeout_events.append(
-                                    f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - "
-                                    f"TIMEOUT ({settings.timeout}s): Killing {spec.name} "
-                                    f"cfg #{cfg_idx} rep #{rep_i} "
-                                    f"(k={cfg.num_clusters}, n={cfg.num_samples}, "
-                                    f"d={cfg.num_dimensions})"
-                                )
-                                # Kill and restart worker
-                                worker.terminate()
-                                worker.join()
-                                start_worker()
-                                continue
-                        else:
-                            # In-Process Execution (No safety)
-                            with suppress_output():
-                                gen = DataGenerator(spec.strategy_cls(cfg))
-                                X, y = gen.generate_dataset(strategy_config, seed=dataset_seed)
+                        try:
+                            X, y = runner.generate(spec, cfg, strategy_config, dataset_seed)
+                        except queue.Empty:
+                            if settings.timeout <= 0:
+                                raise
+                            timeout_message = (
+                                f"TIMEOUT ({settings.timeout}s): Killing {spec.name} "
+                                f"cfg #{cfg_idx} rep #{rep_i} "
+                                f"(k={cfg.num_clusters}, n={cfg.num_samples}, "
+                                f"d={cfg.num_dimensions})"
+                            )
+                            logger.warning(timeout_message)
+                            timeout_events.append(
+                                f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - "
+                                f"{timeout_message}"
+                            )
+                            runner.restart()
+                            continue
 
                         gen_duration = time.perf_counter() - gen_start
                         total_gen_time += gen_duration
@@ -226,8 +241,7 @@ def run_generation(
                         repeats=repeats_payload,
                     )
     finally:
-        if settings.timeout > 0:
-            stop_worker()
+        runner.stop()
 
     pipeline_duration = time.perf_counter() - pipeline_start_time
     logger.info(f"Pipeline completed in {pipeline_duration:.2f}s")

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Empty
 from typing import Any
 
 import numpy as np
@@ -144,3 +145,106 @@ def test_run_generation_supports_cfg_filtering(tmp_path: Path, monkeypatch: pyte
     assert len(calls_writer.calls) == 1
     assert calls_writer.calls[0]["strategy_name"] == "Supports"
     assert len(calls_writer.calls[0]["repeats"]) == 1
+
+
+def test_run_generation_recovers_after_timeout_and_skips_failed_repeat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(pipeline, "generate_configs", _fake_generate_configs_single)
+
+    outcomes = [
+        Empty(),
+        ("error", ValueError("bad sample")),
+        ("ok", (np.ones((4, 2)), np.zeros(4))),
+    ]
+    processes = []
+
+    class FakeQueue:
+        def __init__(self):
+            self.tasks = []
+
+        def put(self, task):
+            self.tasks.append(task)
+
+        def get(self, timeout):  # noqa: ARG002
+            result = outcomes.pop(0)
+            if isinstance(result, Empty):
+                raise result
+            return result
+
+    class FakeProcess:
+        def __init__(self, target, args):  # noqa: ARG002
+            self.terminated = False
+            processes.append(self)
+
+        def start(self):
+            pass
+
+        def is_alive(self):
+            return not self.terminated
+
+        def terminate(self):
+            self.terminated = True
+
+        def join(self, timeout=None):  # noqa: ARG002
+            pass
+
+    monkeypatch.setattr(pipeline.multiprocessing, "Queue", FakeQueue)
+    monkeypatch.setattr(pipeline.multiprocessing, "Process", FakeProcess)
+
+    calls_writer = RecordingWriter()
+    spec = StrategySpec(
+        name="Recovering",
+        strategy_cls=TopLevelDummyStrategy,
+        sampler=_sampler,
+        supports_cfg=lambda cfg: True,
+    )
+    settings = GenerationSettings(
+        n_repeats=3,
+        output_dir=tmp_path,
+        n_configs=1,
+        timeout=0.1,
+    )
+
+    run_generation(settings, strategies=[spec], writer=calls_writer)
+
+    assert len(processes) == 2
+    assert processes[0].terminated
+    assert len(calls_writer.calls) == 1
+    repeats = calls_writer.calls[0]["repeats"]
+    assert len(repeats) == 1
+    np.testing.assert_array_equal(repeats[0]["X"], np.ones((4, 2)))
+    np.testing.assert_array_equal(repeats[0]["y"], np.zeros(4))
+    assert outcomes == []
+
+
+def test_inprocess_queue_empty_is_a_generation_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    monkeypatch.setattr(pipeline, "generate_configs", _fake_generate_configs_single)
+
+    class FailingGenerator:
+        def __init__(self, strategy):  # noqa: ARG002
+            pass
+
+        def generate_dataset(self, strategy_config, seed):  # noqa: ARG002
+            raise Empty("from generator")
+
+    monkeypatch.setattr(pipeline, "DataGenerator", FailingGenerator)
+    calls_writer = RecordingWriter()
+    spec = StrategySpec(
+        name="Failing",
+        strategy_cls=TopLevelDummyStrategy,
+        sampler=_sampler,
+        supports_cfg=lambda cfg: True,
+    )
+
+    run_generation(
+        GenerationSettings(n_repeats=1, n_configs=1, output_dir=tmp_path, timeout=0),
+        strategies=[spec],
+        writer=calls_writer,
+    )
+
+    assert calls_writer.calls == []
+    assert not (tmp_path / "timeouts.log").exists()
+    assert "Failed to generate Failing" in caplog.text
