@@ -97,10 +97,6 @@ class ModelConfig:
     dropout: float = 0.3
     num_bins: int = 50
     model_type: str = "default"
-    # Linear-attention backend settings (used by model_type="dit_fla_v1").
-    fla_backend: str = "flash_linear_attention"  # auto | flash_linear_attention | torch_linear
-    fla_allow_fallback: bool = True
-    fla_eps: float = 1e-6
 
 
 @dataclass

@@ -1,6 +1,5 @@
 import logging
 
-from .metrics import dunn_score
 from .preprocessing import apply_standard_scaling, coerce_predicted_k_to_int
 
 
@@ -16,7 +15,6 @@ def configure_logging(verbosity: int = 0) -> None:
 
 __all__ = [
     "configure_logging",
-    "dunn_score",
     "apply_standard_scaling",
     "coerce_predicted_k_to_int",
 ]

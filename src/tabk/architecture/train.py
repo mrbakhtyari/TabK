@@ -83,9 +83,6 @@ def train_one_epoch(
     accum_steps = config.training.accum_steps
     num_batches = len(loader)
 
-    remainder = num_batches % accum_steps
-    last_window_size = remainder if remainder != 0 else accum_steps
-    last_window_start = num_batches - last_window_size
     progress_desc = f"Fold {fold_idx + 1} | Epoch {epoch_idx + 1}/{config.training.epochs}"
     use_live_progress = is_interactive_stream()
 
@@ -101,8 +98,6 @@ def train_one_epoch(
         y = y.to(device, non_blocking=True)
         r_mask = r_mask.to(device, non_blocking=True)
         c_mask = c_mask.to(device, non_blocking=True)
-
-        current_accum = last_window_size if i >= last_window_start else accum_steps
 
         with torch.amp.autocast("cuda", enabled=use_amp, dtype=amp_dtype):
             logits = model(x, r_mask, c_mask)

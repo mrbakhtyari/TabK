@@ -43,7 +43,7 @@ def run_training_pipeline(
     h5_path = data_dir / h5_filename
     if not h5_path.is_file():
         raise FileNotFoundError(
-            f"HDF5 DataLake not found at: {h5_path}. Run scripts/prepare_h5_dataset.py first."
+            f"HDF5 DataLake not found at: {h5_path}. Run scripts/build_h5_from_raw.py first."
         )
 
     logger.info(f"\nStarting {config.training.k_folds}-fold training from {h5_path}...")

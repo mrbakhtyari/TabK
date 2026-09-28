@@ -40,25 +40,6 @@ def main():
         choices=MODEL_TYPES,
         help="Backbone type to train",
     )
-    parser.add_argument(
-        "--fla-backend",
-        type=str,
-        default="flash_linear_attention",
-        choices=["auto", "flash_linear_attention", "torch_linear"],
-        help="Linear attention backend used by dit_fla_v1",
-    )
-    parser.add_argument(
-        "--fla-allow-fallback",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Allow fallback to torch linear attention if flash-linear-attention is unavailable",
-    )
-    parser.add_argument(
-        "--fla-eps",
-        type=float,
-        default=1e-6,
-        help="Numerical stabilization epsilon for torch linear attention backend",
-    )
 
     # K-Estimator Head
     parser.add_argument("--min-k", type=int, default=2, help="Minimum number of clusters")
@@ -116,9 +97,6 @@ def main():
             dropout=args.dropout,
             num_bins=args.num_bins,
             model_type=args.model_type,
-            fla_backend=args.fla_backend,
-            fla_allow_fallback=args.fla_allow_fallback,
-            fla_eps=args.fla_eps,
         ),
         training=TrainingConfig(
             batch_size=args.batch_size,
