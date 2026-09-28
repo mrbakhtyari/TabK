@@ -1,6 +1,6 @@
 import logging
 
-from .preprocessing import apply_standard_scaling, coerce_predicted_k_to_int
+from .preprocessing import apply_standard_scaling
 
 
 def configure_logging(verbosity: int = 0) -> None:
@@ -16,5 +16,4 @@ def configure_logging(verbosity: int = 0) -> None:
 __all__ = [
     "configure_logging",
     "apply_standard_scaling",
-    "coerce_predicted_k_to_int",
 ]

@@ -68,10 +68,7 @@ def test_d_range(d_low, d_high):
 
 
 def test_reproducibility_same_seed():
-    """
-    Ensures that generating configs with the same seed produces identical results.
-    This serves as the primary verification for deterministic generation.
-    """
+    """Ensures that generating configs with the same seed produces identical results."""
     n_configs = 50
     seed = 42
 
@@ -83,10 +80,7 @@ def test_reproducibility_same_seed():
 
 
 def test_global_seed_does_not_affect_generation():
-    """
-    Ensure that setting np.random.seed() globally does not alter the
-    generation, which should rely on its own local RNG.
-    """
+    """Setting np.random.seed() globally does not change the configs."""
     seed = 12345
     n_configs = 10
 

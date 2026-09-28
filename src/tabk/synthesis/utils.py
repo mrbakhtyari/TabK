@@ -27,10 +27,7 @@ def suppress_output(suppress_stdout: bool = True, suppress_stderr: bool = True):
 
 
 def seed_everything(seed: int) -> None:
-    """
-    Sets seeds for random, numpy, and torch.
-    Useful for libraries that rely on global random state (like repliclust.distort).
-    """
+    """Sets seeds for random, numpy, and torch."""
 
     random.seed(seed)
     np.random.seed(seed)

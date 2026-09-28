@@ -187,10 +187,7 @@ def verify_directories_identical(dir1: Path, dir2: Path) -> bool:
 
 
 def test_pipeline_reproducibility():
-    """
-    Verifies that the entire generation pipeline is reproducible.
-    Runs the generation twice with the same seed and checks if the output directories are identical.
-    """
+    """Verifies that the entire generation pipeline is reproducible."""
     n_configs = 20
     n_repeats = 2
     seed = 42

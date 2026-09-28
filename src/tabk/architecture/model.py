@@ -5,10 +5,7 @@ from .config import ModelConfig
 
 
 class QuantileFeatureEncoder(nn.Module):
-    """
-    (QFE) Generates column embeddings based on their statistical distribution.
-    Ensures Column Permutation Invariance.
-    """
+    """Quantile Feature Encoder (QFE): embeds each column from its value distribution."""
 
     def __init__(self, d_model, num_bins=10):
         super().__init__()
@@ -73,13 +70,7 @@ class QuantileFeatureEncoder(nn.Module):
 
 
 class PMAPooling(nn.Module):
-    """
-    Pooling by Multihead Attention (PMA) with k=1.
-
-    A Permutation-Invariant Pooling mechanism from the Set Transformer paper.
-    Uses a learned 'Seed Vector' to query the set and extract a summary.
-    Better than MeanPooling for detecting outliers or specific clusters.
-    """
+    """Pooling by Multihead Attention (PMA) with k=1."""
 
     def __init__(self, d_model, num_heads=4):
         super().__init__()
@@ -108,16 +99,7 @@ class PMAPooling(nn.Module):
 
 
 class ColumnSetEmbedding(nn.Module):
-    """
-    Inner Loop: Converts a Set of Columns into a Single Row Vector.
-
-    Achieves Column Invariance by:
-    1. Using QFE to create position-independent column identities
-    2. Running self-attention on QFE embeddings to disambiguate columns
-       with similar distributions (O(B·C²) instead of O(B·R·C²))
-    3. Combining refined QFE with value embeddings
-    4. Using permutation-invariant addition aggregation
-    """
+    """Converts the set of columns of each row into a single row vector."""
 
     def __init__(self, config: ModelConfig):
         super().__init__()
@@ -180,10 +162,7 @@ class ColumnSetEmbedding(nn.Module):
 
 
 class DoubleInvariantTransformer(nn.Module):
-    """
-    The Main Model.
-    Structure: [Column Set -> Row Vector] -> [Row Set -> Table Vector] -> Class
-    """
+    """Permutation-invariant model: columns -> row vectors -> table vector -> head."""
 
     def __init__(
         self,
@@ -240,19 +219,19 @@ class DoubleInvariantTransformer(nn.Module):
         if col_mask is None:
             col_mask = torch.zeros((B, C), dtype=torch.bool, device=device)
 
-        # --- Phase 1: Column Invariance ---
+        # Phase 1: Column Invariance
 
         # "Bag of Columns" -> Row Vector
 
         row_vectors = self.col_processor(x, row_mask, col_mask)  # (B, R, D)
 
-        # --- Phase 2: Row Interaction ---
+        # Phase 2: Row Interaction
 
         # "Sequence of Rows" (but permutation invariant due to pooling later)
 
         encoded_rows = self.row_transformer(row_vectors, src_key_padding_mask=row_mask)
 
-        # --- Phase 3: Row Invariance ---
+        # Phase 3: Row Invariance
 
         # "Bag of Rows" -> Table Vector
 

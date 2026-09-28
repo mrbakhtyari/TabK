@@ -13,10 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def scan_h5_datalake(h5_path: Path | str) -> dict[str, list[dict]]:
-    """Single-pass scan: reads all sample IDs and their metadata, grouped by split.
-
-    Returns a dict like ``{"train": [{"sample_id": ..., "config_group_id": ..., ...}, ...], ...}``
-    """
+    """Single-pass scan: reads all sample IDs and their metadata, grouped by split."""
     splits: dict[str, list[dict]] = {}
     with h5py.File(h5_path, "r") as h5f:
         root = h5f["datasets"]
@@ -31,12 +28,7 @@ def scan_h5_datalake(h5_path: Path | str) -> dict[str, list[dict]]:
 
 
 class H5Dataset(Dataset):
-    """In-memory PyTorch Dataset pre-cached from the HDF5 DataLake.
-
-    All features and targets are loaded and transformed into RAM during
-    ``__init__`` so that training incurs zero disk I/O and zero redundant
-    computation per batch.
-    """
+    """In-memory PyTorch Dataset pre-cached from the HDF5 DataLake."""
 
     def __init__(
         self,

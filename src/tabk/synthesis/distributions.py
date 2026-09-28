@@ -15,10 +15,7 @@ def zipf_quantile(u: np.ndarray, dist: rv_discrete) -> np.ndarray:
 
 
 def loguniform_quantile(u: np.ndarray, n_lo: int, n_hi: int) -> np.ndarray:
-    """
-    Map uniform samples u in [0,1) to discrete values in [n_lo, n_hi]
-    using a log-uniform distribution.
-    """
+    """Map uniform samples in [0, 1) to log-uniform integers in [n_lo, n_hi]."""
     if n_lo <= 0 or n_hi <= n_lo:
         raise ValueError("Require 0 < n_lo < n_hi.")
     u = np.clip(u, 0.0, 1.0 - 1e-12)
@@ -30,12 +27,7 @@ def loguniform_quantile(u: np.ndarray, n_lo: int, n_hi: int) -> np.ndarray:
 def features_from_buckets(
     u_bucket: np.ndarray, u_within: np.ndarray, spec: str | None = None
 ) -> np.ndarray:
-    """
-    Map two uniforms to integer features d using stratified buckets.
-
-    spec format: "prob:lo:hi,prob:lo:hi,..."
-    default -> "0.5:2:30,0.35:31:90,0.15:91:200"
-    """
+    """Map two uniforms to integer features d using stratified buckets."""
     if spec is None or spec.strip() == "":
         spec = "0.5:2:30,0.35:31:90,0.15:91:200"
 

@@ -97,18 +97,7 @@ class RepliclustStrategy(DataGenerationStrategy):
 
 
 class ConcentricHyperspheresStrategy(DataGenerationStrategy):
-    """
-    Generate concentric hyperspherical clusters in arbitrary dimensions.
-
-    Uses ClusterConfig for:
-      - num_clusters -> num_clusters
-      - num_dimensions -> dim
-      - num_samples -> total points (distributed to clusters)
-
-    Optional config:
-        - factor: float in [0, 1), controls how close the circles are. Default = 0.5
-        - noise: float >= 0, standard deviation of Gaussian noise added to each point. Default = 0.0
-    """
+    """Generate concentric hyperspherical clusters in arbitrary dimensions."""
 
     def generate(
         self, strategy_config: StrategyConfig, rng: np.random.Generator
@@ -143,19 +132,7 @@ class ConcentricHyperspheresStrategy(DataGenerationStrategy):
 
 
 class MultiInterlocked2DMoonsStrategy(DataGenerationStrategy):
-    """
-    Generate multiple interlocked 2D moons (like sklearn make_moons) for any number of clusters.
-
-    Uses ClusterConfig for:
-      - num_clusters -> num_clusters
-      - num_dimensions -> dim
-      - num_samples -> total points (distributed to clusters)
-
-    Each pair of clusters forms a classic interlocked arc. If odd, the last one is a single moon.
-    Optional config:
-        - noise: float >= 0, standard deviation of Gaussian noise added to each point.
-          Default = 0.05
-    """
+    """Generate interlocked 2D moons (like make_moons) for any number of clusters."""
 
     def generate(
         self,
@@ -205,37 +182,7 @@ class MultiInterlocked2DMoonsStrategy(DataGenerationStrategy):
 
 
 class DensiredStrategy(DataGenerationStrategy):
-    """
-    Densired from https://doi.org/10.1007/978-3-031-70368-3_1
-
-    strategy_config keys (all optional; sensible defaults are provided):
-        radius: float                  # base core radius (default: 1.0)
-        step: float                    # spacing between cores (default: 1.5)
-        min_dist: float                # minimum distance factor (>= ~0.9; default: 1.05)
-        dens_factors: bool | list[float]
-                                      # if True, random per-cluster density scales; or
-                                      # provide explicit list
-        clu_ratios: list[float]       # mixture proportions (length = k); overrides min_ratio
-        min_ratio: float              # lower bound for random mixture proportions
-                                      # if clu_ratios not given
-        ratio_noise: float            # fraction of background noise points (0..1)
-        square: bool                  # if True, noise in a square region
-        connections: int              # number of connection segments between clusters (0_k*(k-1)/2)
-        ratio_con: float              # fraction of connection points (0..1)
-        con_radius: float
-        con_step: float
-        con_min_dist: float
-        branch: float                 # branching probability of skeleton
-        star: bool                    # star-like skeleton layout
-        momentum: float               # random-walk momentum
-        distribution: str | list[str] | "uniform" | "paper" | "gaussian" | "studentt" | int
-                                      # 'studentt' or an integer interpreted as df for t
-        seed: int                     # RNG seed for reproducibility
-
-    Notes:
-      - Output is (X, y) with y as integer cluster labels.
-      - If ratio_noise > 0 or ratio_con > 0, labels may include special tags; we cast to int.
-    """
+    """Densired from https://doi.org/10.1007/978-3-031-70368-3_1"""
 
     def generate(
         self, strategy_config: StrategyConfig, rng: np.random.Generator
@@ -254,20 +201,7 @@ class DensiredStrategy(DataGenerationStrategy):
 
 
 class PyClugenStrategy(DataGenerationStrategy):
-    """
-    PyClugen data generation strategy from https://doi.org/10.1016/j.knosys.2023.110836
-
-    strategy_config (everything else stays at pyclugen defaults):
-        direction: Average direction of the cluster-supporting lines. Can be a
-        vector of length `num_dims` (same direction for all clusters) or a
-        matrix of size `num_clusters` x `num_dims` (one direction per cluster).
-        angle_disp: Angle dispersion of cluster-supporting lines (radians).
-        cluster_sep: Average cluster separation in each dimension (vector of size `num_dims`).
-        llength: Average length of cluster-supporting lines.
-        llength_disp: Length dispersion of cluster-supporting lines.
-        lateral_disp: Cluster lateral dispersion, i.e., dispersion of points from their
-            projection on the cluster-supporting line.
-    """
+    """PyClugen data generation strategy from https://doi.org/10.1016/j.knosys.2023.110836"""
 
     def generate(
         self,

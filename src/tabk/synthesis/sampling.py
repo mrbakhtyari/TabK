@@ -153,9 +153,6 @@ def pyclugen_sampler(rng: np.random.Generator, num_dims: int) -> dict:
 
 
 def lhs(n: int, d: int, rng: np.random.Generator) -> np.ndarray:
-    """
-    Latin Hypercube Sampling.
-    Returns n samples in [0, 1)^d.
-    """
+    """Latin Hypercube Sampling."""
     sampler = qmc.LatinHypercube(d=d, seed=rng)
     return sampler.random(n=n)

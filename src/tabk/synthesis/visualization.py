@@ -90,11 +90,7 @@ def plot_coverage(
     show: bool = False,
     seed: int = 42,
 ) -> None:
-    """
-    Plot 2D coverage scatter plots in a single figure with 3 subplots:
-    (n vs d), (k vs n), (k vs d).
-    Adds jitter to k for better visualization.
-    """
+    """Plot (n, d), (k, n) and (k, d) coverage scatter plots in one figure."""
     _setup_plot_style()
 
     rng = np.random.default_rng(seed)

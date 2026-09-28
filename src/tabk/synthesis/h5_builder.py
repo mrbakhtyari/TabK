@@ -1,12 +1,3 @@
-"""
-Module to build a unified HDF5 DataLake directly from raw generated NPZ files.
-
-Skips the clustering benchmark pipeline entirely — only needs the raw
-features and JSON sidecar metadata. Applies StandardScaler normalization
-inline and writes the result in the same schema that H5Dataset / train.py
-expect.
-"""
-
 import json
 import logging
 import random
@@ -19,9 +10,6 @@ from tqdm import tqdm
 from tabk.utils import apply_standard_scaling
 
 logger = logging.getLogger(__name__)
-
-
-# ── Helpers ──────────────────────────────────────────────────────────
 
 
 def _discover_npz_files(data_dir: Path) -> list[Path]:
@@ -48,13 +36,7 @@ def _assign_splits(
     test_ratio: float,
     seed: int,
 ) -> list[dict]:
-    """Assign train/test split by shuffling and splitting sample indices.
-
-    With 1 replication per config and 40K unique configs, each sample
-    is independently generated from a unique (k, n, d) + strategy
-    combination. No grouping is needed — a simple random split is
-    safe from data leakage.
-    """
+    """Assign train/test split by shuffling and splitting sample indices."""
     indices = list(range(len(sample_records)))
     rng = random.Random(seed)
     rng.shuffle(indices)
@@ -67,31 +49,13 @@ def _assign_splits(
     return sample_records
 
 
-# ── Main builder ─────────────────────────────────────────────────────
-
-
 def build_h5_from_raw(
     data_dir: Path | str,
     out_h5: str | None = None,
     test_ratio: float = 0.1,
     seed: int = 42,
 ) -> None:
-    """Walk raw NPZ files, normalize, and write a unified HDF5 DataLake.
-
-    HDF5 Schema (per sample group):
-        datasets/{sample_id}/
-            normalized_features   : float32 dataset (n_rows, n_cols)
-            labels                : int64   dataset (n_rows,)
-            @config_group_id      : str   — "{strategy}_cfg{index}" for CV grouping
-            @k_value              : int   — number of true clusters
-            @split                : str   — "train" or "test"
-            @strategy             : str   — generation strategy name
-            @cfg_index            : int   — LHS config index
-            @n_objects            : int   — num_samples from ClusterConfig
-            @n_dimensions         : int   — num_dimensions from ClusterConfig
-            @seed                 : int   — RNG seed used for this sample
-            @strategy_config_json : str   — JSON-encoded strategy hyperparameters
-    """
+    """Walk raw NPZ files, normalize, and write a unified HDF5 DataLake."""
     data_dir = Path(data_dir)
 
     # Default output name matches the parent directory name
@@ -99,7 +63,7 @@ def build_h5_from_raw(
         out_h5 = f"{data_dir.resolve().name}.h5"
     h5_path = data_dir / out_h5
 
-    # ── Phase 1: Discover & index all samples ────────────────────────
+    # Phase 1: Discover & index all samples
     npz_files = _discover_npz_files(data_dir)
     if not npz_files:
         raise FileNotFoundError(f"No .npz files found under {data_dir}")
@@ -161,14 +125,14 @@ def build_h5_from_raw(
 
     logger.info(f"Indexed {len(sample_records)} total samples")
 
-    # ── Phase 2: Assign train/test split ─────────────────────────────
+    # Phase 2: Assign train/test split
     sample_records = _assign_splits(sample_records, test_ratio=test_ratio, seed=seed)
 
     n_train = sum(1 for r in sample_records if r["split"] == "train")
     n_test = sum(1 for r in sample_records if r["split"] == "test")
     logger.info(f"Split: {n_train} train, {n_test} test ({len(sample_records)} total)")
 
-    # ── Phase 3: Build HDF5 ──────────────────────────────────────────
+    # Phase 3: Build HDF5
     logger.info(f"Writing HDF5 to: {h5_path}")
     written = 0
     skipped = 0
@@ -198,7 +162,7 @@ def build_h5_from_raw(
             grp.create_dataset("normalized_features", data=X_norm)
             grp.create_dataset("labels", data=y)
 
-            # ── Store metadata as HDF5 attributes ────────────────────
+            # Store metadata as HDF5 attributes
             grp.attrs["config_group_id"] = rec["config_group_id"]
             grp.attrs["k_value"] = rec["k_value"]
             grp.attrs["split"] = rec["split"]

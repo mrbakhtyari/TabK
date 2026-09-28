@@ -51,19 +51,7 @@ def save_checkpoint(
     config: AppConfig = None,
     additional_info=None,
 ):
-    """
-    Save model checkpoint with comprehensive metadata.
-
-    Args:
-        model: The model to save
-        optimizer: The optimizer state
-        epoch: Current epoch
-        loss: Best validation loss
-        path: Path to save checkpoint
-        fold_idx: Optional fold index for K-fold training
-        config: Optional AppConfig object to save hyperparameters
-        additional_info: Optional dict with additional metadata
-    """
+    """Save model checkpoint with comprehensive metadata."""
 
     logger.info(f"Saving model to {path}...")
 
@@ -105,13 +93,7 @@ def load_checkpoint(path, model, optimizer=None, device=None):
 
 
 def plot_training_history(all_histories: list, save_dir: str = ".") -> None:
-    """
-    Plots training and validation loss for each fold.
-
-    Args:
-        all_histories: List of history dicts, each containing 'train_loss' and 'val_loss' lists.
-        save_dir: Directory to save the plot.
-    """
+    """Plots training and validation loss for each fold."""
 
     plt.figure(figsize=(12, 8))
 
@@ -138,27 +120,14 @@ def plot_training_history(all_histories: list, save_dir: str = ".") -> None:
 
 
 def save_training_history(all_histories: list, save_path: str = "training_history.json") -> None:
-    """
-    Saves training history to a JSON file.
-
-    Args:
-        all_histories: List of history dicts to save.
-        save_path: Path to save the JSON file.
-    """
+    """Saves training history to a JSON file."""
     with open(save_path, "w") as f:
         json.dump(all_histories, f, indent=2)
     logger.info(f"Training history saved to {save_path}")
 
 
 def save_run_manifest(config, metrics, path) -> None:
-    """
-    Saves a run manifest JSON sidecar.
-
-    Args:
-        config: Configuration dictionary (args).
-        metrics: Dictionary of final validation metrics.
-        path: Path to save the manifest.
-    """
+    """Saves a run manifest JSON sidecar."""
     manifest = {
         "timestamp": datetime.datetime.now().isoformat(),
         "config": config,

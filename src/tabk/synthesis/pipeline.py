@@ -45,10 +45,7 @@ class GenerationSettings:
 
 
 def _worker_loop(input_q: multiprocessing.Queue, output_q: multiprocessing.Queue):
-    """
-    Persistent worker loop.
-    Waits for tasks, executes them, and sends results back.
-    """
+    """Run queued generation tasks and send back results until a stop signal."""
     while True:
         try:
             task = input_q.get()
@@ -116,7 +113,7 @@ def run_generation(
     # Generate report for the configs
     config_report(cluster_configs, settings.output_dir, seed=settings.master_seed)
 
-    # --- Worker Management ---
+    # Worker Management
     worker = None
     input_q = None
     output_q = None
@@ -168,7 +165,7 @@ def run_generation(
                         X, y = None, None
 
                         if settings.timeout > 0:
-                            # --- IPC Execution ---
+                            # IPC Execution
                             task = (spec.strategy_cls, cfg, strategy_config, dataset_seed)
                             input_q.put(task)
 
@@ -198,7 +195,7 @@ def run_generation(
                                 start_worker()
                                 continue
                         else:
-                            # --- In-Process Execution (No safety) ---
+                            # In-Process Execution (No safety)
                             with suppress_output():
                                 gen = DataGenerator(spec.strategy_cls(cfg))
                                 X, y = gen.generate_dataset(strategy_config, seed=dataset_seed)

@@ -1,8 +1,3 @@
-"""
-Training module: single-epoch training, validation, per-fold training, and K-fold orchestration.
-All data is loaded from the unified HDF5 DataLake — no parquet or NPZ dependencies remain.
-"""
-
 import logging
 import math
 import time
@@ -283,14 +278,7 @@ def execute_kfold_training(
     config: AppConfig,
     base_split: str = "train",
 ) -> tuple[list[float], list[dict], list[float]]:
-    """Execute GroupKFold cross-validation directly from the HDF5 DataLake.
-
-    Groups are defined by `config_group_id` so that datasets sharing the same
-    structural parameters (n_clusters, n_dimensions, n_objects) never leak
-    across train/validation folds.
-
-    Data is cached into RAM once; each fold uses torch Subset views.
-    """
+    """Run stratified k-fold cross-validation on the train split of the DataLake."""
     all_splits = scan_h5_datalake(h5_path)
     metadata = all_splits.get(base_split, [])
     if not metadata:

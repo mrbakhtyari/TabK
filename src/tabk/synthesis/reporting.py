@@ -46,10 +46,7 @@ def save_configs_csv(configs: list[ClusterConfig], output_dir: Path) -> None:
 
 
 def config_report(configs: list[ClusterConfig], output_dir: Path, seed: int = 42) -> None:
-    """
-    Generate a report for the generated configurations, including a CSV file
-    and visualization plots.
-    """
+    """Write a CSV and coverage plots for the generated configurations."""
     logger.info("Generating synthesis report...")
 
     # Save CSV
@@ -118,10 +115,7 @@ def save_run_metadata(
 
 
 def save_dataset_manifest(output_dir: Path) -> None:
-    """
-    Scan the output directory for generated .npz datasets and write their
-    absolute paths to a manifest file (dataset_paths.txt).
-    """
+    """Write the absolute paths of all generated .npz files to dataset_paths.txt."""
     try:
         logger.info(f"Scanning {output_dir} for generated .npz datasets...")
         npz_files = sorted(output_dir.rglob("*.npz"))
