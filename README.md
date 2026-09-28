@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <a href="https://anonymous.4open.science/r/TabK"><img alt="Anonymous Code" src="https://img.shields.io/badge/Code-Anonymous_4open-blue?style=flat-square"/></a>
-  <a href="https://creativecommons.org/licenses/by-nc/4.0/"><img alt="License: CC BY-NC 4.0" src="https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg?style=flat-square"/></a>
+  <a href="https://github.com/mrbakhtyari/TabK/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/mrbakhtyari/TabK/ci.yml?branch=main&style=flat-square&label=CI"/></a>
+  <a href="LICENSE"><img alt="License: CC BY-NC 4.0" src="https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg?style=flat-square"/></a>
   <img alt="Python 3.13+" src="https://img.shields.io/badge/Python-3.13%2B-3776AB?style=flat-square&logo=python&logoColor=white"/>
   <img alt="PyTorch 2.9+" src="https://img.shields.io/badge/PyTorch-2.9%2B-EE4C2C?style=flat-square&logo=pytorch&logoColor=white"/>
-  <img alt="Conference" src="https://img.shields.io/badge/NeurIPS-2026_(Under Review)-8B5CF6?style=flat-square"/>
+  <img alt="Conference" src="https://img.shields.io/badge/NeurIPS_2026-Accepted-8B5CF6?style=flat-square"/>
 </p>
 
 <p align="center">
@@ -34,55 +34,6 @@
 
 ---
 
-## Project Structure
-
-```
-TabK/
-├── src/tabk/              # Core library
-│   ├── architecture/            # Model, training, inference, heads
-│   │   ├── model.py             # DoubleInvariantTransformer backbone
-│   │   ├── heads/               # Task-specific prediction heads
-│   │   │   ├── k_estimator.py   # DLDL, classification, focal, ordinal, regression
-│   │   │   └── base.py          # Abstract head interface
-│   │   ├── ablation_models.py   # Ablation variants (w/o QFE, PMA, col-attn)
-│   │   ├── train.py             # K-fold training loop with AMP & gradient accumulation
-│   │   ├── inference.py         # Ensemble inference (5-fold checkpoint averaging)
-│   │   ├── dataset.py           # HDF5 DataLake → in-memory PyTorch Dataset
-│   │   ├── config.py            # Dataclass-based configuration system
-│   │   └── pipeline.py          # End-to-end training orchestration
-│   │
-│   ├── synthesis/               # Synthetic data generation (generative prior)
-│   │   ├── strategies.py        # 5 geometric generators (see paper Section B)
-│   │   ├── pipeline.py          # Parallel generation with timeout safety
-│   │   ├── h5_builder.py        # Raw NPZ → unified HDF5 DataLake
-│   │   └── registry.py          # Strategy registry & hyperparameter samplers
-│   │
-│   ├── baseline/                # Baseline method implementations
-│   │   ├── k_estimation.py      # Unified k-selection evaluation pipeline
-│   │   ├── base_algorithm.py    # K-Means, GMM, Spectral execution engine
-│   │   ├── cvi_methods.py       # Silhouette, CH, DB, Dunn wrappers
-│   │   ├── gap_statistic.py     # Gap statistic implementation
-│   │   ├── imwkmeans_k.py       # Intelligent MWK-Means
-│   │   └── x_means.py           # X-Means via pyclustering
-│   │
-│   └── utils/                   # Shared utilities
-│       ├── plotting.py          # NeurIPS-style plotting & method registry
-│       ├── preprocessing.py     # StandardScaler normalization
-│       ├── metrics.py           # Dunn Index implementation
-│       └── progress.py          # Terminal progress utilities
-│
-├── scripts/                     # Executable entry points
-│   ├── train_TabK.py            # Training with full CLI (argparse)
-│   ├── generate_datasets.py     # Synthetic prior generation
-│   ├── build_h5_from_raw.py     # NPZ → HDF5 conversion
-│   └── create_subsampled_h5.py  # Dataset scaling ablation helper
-│
-└── tests/                       # Unit tests (pytest)
-
-```
-
----
-
 ## Installation
 
 ### Requirements
@@ -94,17 +45,16 @@ TabK/
 ### Setup
 
 ```bash
-# Clone the repository
-git clone https://anonymous.4open.science/r/TabK
+git clone https://github.com/mrbakhtyari/TabK.git
 cd TabK
-
-# Install all dependencies
 uv sync
 ```
 
 ---
 
-## Run Inference
+## Inference
+
+The pretrained model (a 5-fold checkpoint ensemble) ships with the repository in `models/TabK`.
 
 ```python
 from sklearn.datasets import load_iris
@@ -122,6 +72,11 @@ ctx = load_inference_context("models/TabK")
 predicted_k = predict_single(ctx, X_scaled)
 print(f"Predicted number of clusters: {predicted_k}")  # expected: 3
 ```
+
+The same example runs with `uv run python -m tabk.main`.
+
+The pretrained model predicts *k* ∈ {2, …, 15} and was trained on tables with 100–2,500 rows and 2–200 features.
+
 ---
 
 ## Training
@@ -160,13 +115,13 @@ uv run scripts/train_TabK.py \
     --k-folds 5 \
     --data-dir datasets \
     --h5-filename synthetic_n40000_r1.h5 \
-    --output-dir models/TabK \
+    --output-dir models/TabK_retrained \
     -v
 ```
 
----
+The trained ensemble can then be loaded with `load_inference_context("models/TabK_retrained")`.
 
-## Reproducibility
+### Reproducibility
 
 - All experiments use a fixed random seed (42) with full deterministic settings
 - Training uses 5-fold cross-validation
@@ -175,12 +130,47 @@ uv run scripts/train_TabK.py \
 
 ---
 
+## Project Structure
+
+```
+TabK/
+├── src/tabk/
+│   ├── architecture/            # Model, training, inference, heads
+│   │   ├── model.py             # DoubleInvariantTransformer backbone
+│   │   ├── heads/               # Prediction heads (DLDL, classification, focal, ordinal, regression)
+│   │   ├── ablation_models.py   # Ablation variants (w/o QFE, PMA, col-attn)
+│   │   ├── train.py             # K-fold training loop with AMP & gradient accumulation
+│   │   ├── inference.py         # Ensemble inference (5-fold checkpoint averaging)
+│   │   ├── dataset.py           # HDF5 DataLake → in-memory PyTorch Dataset
+│   │   ├── config.py            # Dataclass-based configuration
+│   │   └── pipeline.py          # End-to-end training orchestration
+│   │
+│   ├── synthesis/               # Synthetic data generation (generative prior)
+│   │   ├── strategies.py        # Geometric generators (see paper Section B)
+│   │   ├── pipeline.py          # Parallel generation with timeout safety
+│   │   ├── h5_builder.py        # Raw NPZ → unified HDF5 DataLake
+│   │   └── registry.py          # Strategy registry & hyperparameter samplers
+│   │
+│   └── utils/                   # Preprocessing, logging and progress helpers
+│
+├── scripts/                     # Command-line entry points
+│   ├── generate_datasets.py     # Synthetic prior generation
+│   ├── build_h5_from_raw.py     # NPZ → HDF5 conversion
+│   ├── train_TabK.py            # Training
+│   └── create_subsampled_h5.py  # Training-set size ablation helper
+│
+├── models/TabK/                 # Pretrained checkpoints
+└── tests/                       # Unit tests (pytest)
+```
+
+---
+
 ## Citation
 
-This section will be updated upon paper acceptance.
+TabK has been accepted at NeurIPS 2026. The paper link and citation will be added here once the paper is published.
 
 ---
 
 ## License
 
-This project is released under the [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) license. It is intended for **educational and research purposes only**. Commercial use is strictly prohibited.
+This project is released under the [CC BY-NC 4.0](LICENSE) license. It is intended for **educational and research purposes only**; commercial use is not permitted.
