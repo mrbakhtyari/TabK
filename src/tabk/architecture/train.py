@@ -321,7 +321,8 @@ def execute_kfold_training(
         train_subset = Subset(full_dataset, train_idx.tolist())
         val_subset = Subset(full_dataset, val_idx.tolist())
 
-        common = dict(collate_fn=collate_batch, pin_memory=True)
+        pin_memory = config.training.torch_device.type == "cuda"
+        common = dict(collate_fn=collate_batch, pin_memory=pin_memory)
         train_loader = DataLoader(
             train_subset, batch_size=config.training.batch_size, shuffle=True, **common
         )
