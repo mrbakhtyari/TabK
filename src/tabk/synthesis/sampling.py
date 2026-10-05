@@ -1,20 +1,9 @@
-import json
-from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
 from scipy.stats import qmc
 
-STRATEGY_PARAMS_PATH = Path(__file__).parent / "strategy_params.json"
-
-
-def _load_params() -> dict:
-    """Load sampling parameters from JSON file."""
-    with open(STRATEGY_PARAMS_PATH) as f:
-        return json.load(f)
-
-
-PARAMS = _load_params()
+from .params import PARAMS
 
 
 def sample_loguniform(rng: np.random.Generator, low: float, high: float) -> float:
@@ -31,7 +20,7 @@ def cesar_comin_sampler(rng: np.random.Generator) -> dict:
 def repliclust_sampler(rng: np.random.Generator) -> dict:
     cfg = PARAMS["Repliclust"]
 
-    # Handle overlap choices which are lists of lists in JSON
+    # Convert overlap choices to tuples
     overlap_choices = [tuple(x) for x in cfg["overlap"]["choices"]]
 
     # safer to sample index

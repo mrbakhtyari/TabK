@@ -1,14 +1,13 @@
 import csv
 import json
 import logging
-import shutil
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 
 from .core import ClusterConfig
-from .sampling import STRATEGY_PARAMS_PATH
+from .params import PARAMS
 from .visualization import plot_coverage, plot_distributions
 
 logger = logging.getLogger(__name__)
@@ -19,9 +18,9 @@ def save_strategy_params(output_dir: Path) -> None:
     Save the strategy parameter descriptions to a JSON file.
     """
     try:
-        # Copy params.json from source to output directory
-        dst_params = output_dir / STRATEGY_PARAMS_PATH.name
-        shutil.copy(STRATEGY_PARAMS_PATH, dst_params)
+        dst_params = output_dir / "strategy_params.json"
+        with open(dst_params, "w", encoding="utf-8") as f:
+            json.dump(PARAMS, f, indent=4)
         logger.info(f"Saved strategy parameters to {dst_params}")
     except Exception as e:
         logger.error(f"Failed to save strategy parameters: {e}")
