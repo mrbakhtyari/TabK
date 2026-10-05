@@ -3,99 +3,85 @@ from typing import Any, cast
 import numpy as np
 from scipy.stats import qmc
 
-from .params import PARAMS
+from .config import (
+    CesarCominConfig,
+    ConcentricHyperspheresConfig,
+    DensiredConfig,
+    MoonsConfig,
+    PyClugenConfig,
+    RepliclustConfig,
+)
 
 
-def sample_loguniform(rng: np.random.Generator, low: float, high: float) -> float:
-    return float(np.exp(rng.uniform(np.log(low), np.log(high))))
-
-
-def cesar_comin_sampler(rng: np.random.Generator) -> dict:
-    cfg = PARAMS["CesarComin"]
+def cesar_comin_sampler(
+    rng: np.random.Generator, *, config: CesarCominConfig = CesarCominConfig()
+) -> dict:
     return {
-        "alpha": sample_loguniform(rng, cfg["alpha"]["low"], cfg["alpha"]["high"]),
+        "alpha": config.alpha.sample(rng),
     }
 
 
-def repliclust_sampler(rng: np.random.Generator) -> dict:
-    cfg = PARAMS["Repliclust"]
+def repliclust_sampler(
+    rng: np.random.Generator, *, config: RepliclustConfig = RepliclustConfig()
+) -> dict:
+    idx = rng.choice(len(config.overlap.choices), p=config.overlap.p)
+    min_overlap, max_overlap = config.overlap.choices[idx]
 
-    # Convert overlap choices to tuples
-    overlap_choices = [tuple(x) for x in cfg["overlap"]["choices"]]
-
-    # safer to sample index
-    idx = rng.choice(len(overlap_choices))
-    min_overlap, max_overlap = overlap_choices[idx]
-
-    transform_type = rng.choice(cfg["transform_type"]["choices"], p=cfg["transform_type"]["p"])
+    transform_type = rng.choice(config.transform_type.choices, p=config.transform_type.p)
 
     return {
         "min_overlap": min_overlap,
         "max_overlap": max_overlap,
-        "aspect_ref": rng.choice(cfg["aspect_ref"]["choices"]),
-        "aspect_maxmin": rng.choice(cfg["aspect_maxmin"]["choices"]),
-        "radius_maxmin": rng.choice(cfg["radius_maxmin"]["choices"]),
-        "imbalance_ratio": rng.choice(cfg["imbalance_ratio"]["choices"]),
+        "aspect_ref": rng.choice(config.aspect_ref.choices, p=config.aspect_ref.p),
+        "aspect_maxmin": rng.choice(config.aspect_maxmin.choices, p=config.aspect_maxmin.p),
+        "radius_maxmin": rng.choice(config.radius_maxmin.choices, p=config.radius_maxmin.p),
+        "imbalance_ratio": rng.choice(config.imbalance_ratio.choices, p=config.imbalance_ratio.p),
         "transform_type": transform_type,
     }
 
 
-def concentric_hyperspheres_sampler(rng: np.random.Generator) -> dict:
-    cfg = PARAMS["ConcentricHyperspheres"]
+def concentric_hyperspheres_sampler(
+    rng: np.random.Generator,
+    *,
+    config: ConcentricHyperspheresConfig = ConcentricHyperspheresConfig(),
+) -> dict:
     return {
-        "noise": rng.uniform(cfg["noise"]["low"], cfg["noise"]["high"]),
-        "factor": rng.uniform(cfg["factor"]["low"], cfg["factor"]["high"]),
+        "noise": config.noise.sample(rng),
+        "factor": config.factor.sample(rng),
     }
 
 
-def moons_sampler(rng: np.random.Generator) -> dict:
-    cfg = PARAMS["MultiInterlocked2DMoons"]
+def moons_sampler(rng: np.random.Generator, *, config: MoonsConfig = MoonsConfig()) -> dict:
     return {
-        "noise": rng.uniform(cfg["noise"]["low"], cfg["noise"]["high"]),
+        "noise": config.noise.sample(rng),
     }
 
 
-def densired_sampler(rng: np.random.Generator, num_clusters: int) -> dict:
-    cfg = PARAMS["Densired"]
-
+def densired_sampler(
+    rng: np.random.Generator, num_clusters: int, *, config: DensiredConfig = DensiredConfig()
+) -> dict:
     # core size & spacing
-    radius = sample_loguniform(rng, cfg["radius"]["low"], cfg["radius"]["high"])
-    step = radius * rng.uniform(cfg["step_factor"]["low"], cfg["step_factor"]["high"])
-    min_dist = rng.uniform(cfg["min_dist"]["low"], cfg["min_dist"]["high"])
+    radius = config.radius.sample(rng)
+    step = radius * config.step_factor.sample(rng)
+    min_dist = config.min_dist.sample(rng)
 
     # noise & connectors
-    ratio_noise = rng.uniform(cfg["ratio_noise"]["low"], cfg["ratio_noise"]["high"])
-    use_connectors = rng.random() < cfg["use_connectors_prob"]
+    ratio_noise = config.ratio_noise.sample(rng)
+    use_connectors = rng.random() < config.use_connectors_prob
 
     max_edges = num_clusters * (num_clusters - 1) // 2
-    upper = min(cfg["max_edges_cap"], max_edges)
+    upper = min(config.max_edges_cap, max_edges)
 
     connections = int(rng.integers(1, upper + 1)) if use_connectors else 0
-    ratio_con = (
-        rng.uniform(cfg["ratio_con"]["low"], cfg["ratio_con"]["high"]) if use_connectors else 0
-    )
-    con_min_dist = (
-        rng.uniform(cfg["con_min_dist"]["low"], cfg["con_min_dist"]["high"])
-        if use_connectors
-        else 0.9
-    )
-    con_step = (
-        step * rng.uniform(cfg["con_step_factor"]["low"], cfg["con_step_factor"]["high"])
-        if use_connectors
-        else 2
-    )
+    ratio_con = config.ratio_con.sample(rng) if use_connectors else 0
+    con_min_dist = config.con_min_dist.sample(rng) if use_connectors else 0.9
+    con_step = step * config.con_step_factor.sample(rng) if use_connectors else 2
 
     # density heterogeneity & dynamics
-    dens_factors = rng.random() < cfg["dens_factors_prob"]
+    dens_factors = rng.random() < config.dens_factors_prob
+    momentum = config.momentum.sample(rng)
 
-    mom_cfg = cfg["momentum"]
-    momentum = float(
-        np.interp(
-            rng.beta(mom_cfg["a"], mom_cfg["b"]), [0, 1], [mom_cfg["y_min"], mom_cfg["y_max"]]
-        )
-    )
-
-    dist_choice = rng.choice(cfg["distribution"]["choices"], p=cfg["distribution"]["p"])
+    dist_choice = rng.choice(config.distribution.choices, p=config.distribution.p)
 
     return {
         "radius": radius,
@@ -112,31 +98,30 @@ def densired_sampler(rng: np.random.Generator, num_clusters: int) -> dict:
     }
 
 
-def pyclugen_sampler(rng: np.random.Generator, num_dims: int) -> dict:
-    cfg = PARAMS["PyClugen"]
-
+def pyclugen_sampler(
+    rng: np.random.Generator, num_dims: int, *, config: PyClugenConfig = PyClugenConfig()
+) -> dict:
     # Random unit direction
     direction = rng.normal(size=num_dims)
     direction /= np.linalg.norm(direction)
 
     # Core elongation
-    llength = sample_loguniform(rng, cfg["llength"]["low"], cfg["llength"]["high"])
+    llength = config.llength.sample(rng)
 
     # Slight anisotropy across axes and gentle ↓ with sqrt
-    base_sep = llength * rng.uniform(cfg["base_sep_factor"]["low"], cfg["base_sep_factor"]["high"])
+    base_sep = llength * config.base_sep_factor.sample(rng)
     cluster_sep = (base_sep / np.sqrt(num_dims)) * (0.5 + rng.random(num_dims))
 
-    proj_dist_fn = "norm" if (rng.random() < cfg["proj_dist_fn_prob"]) else "unif"
-    point_dist_fn = "n" if (rng.random() < cfg["point_dist_fn_prob"]) else "n-1"
+    proj_dist_fn = "norm" if (rng.random() < config.proj_dist_fn_prob) else "unif"
+    point_dist_fn = "n" if (rng.random() < config.point_dist_fn_prob) else "n-1"
 
     return {
         "direction": direction,
-        "angle_disp": rng.uniform(cfg["angle_disp"]["low"], cfg["angle_disp"]["high"]),
+        "angle_disp": config.angle_disp.sample(rng),
         "cluster_sep": cluster_sep,
         "llength": llength,
-        "llength_disp": llength
-        * rng.uniform(cfg["llength_disp_factor"]["low"], cfg["llength_disp_factor"]["high"]),
-        "lateral_disp": rng.uniform(cfg["lateral_disp"]["low"], cfg["lateral_disp"]["high"]),
+        "llength_disp": llength * config.llength_disp_factor.sample(rng),
+        "lateral_disp": config.lateral_disp.sample(rng),
         "proj_dist_fn": proj_dist_fn,
         "point_dist_fn": point_dist_fn,
     }

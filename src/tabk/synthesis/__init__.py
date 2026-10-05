@@ -1,3 +1,4 @@
+from .config import SamplingConfig
 from .config_generator import generate_configs
 from .core import ClusterConfig, DataGenerationStrategy, DataGenerator
 from .pipeline import GenerationSettings, run_generation
@@ -29,6 +30,7 @@ __all__ = [
     "DatasetWriter",
     "H5Writer",
     "GenerationSettings",
+    "SamplingConfig",
     "run_generation",
     "config_report",
 ]

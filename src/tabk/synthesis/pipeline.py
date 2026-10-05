@@ -144,7 +144,7 @@ def run_generation(
     logger.info(f"Datasets will be saved under: {settings.output_dir}")
 
     # Save strategy parameters
-    save_strategy_params(settings.output_dir)
+    save_strategy_params(settings.output_dir, strategies)
 
     cluster_configs = generate_configs(
         n_configs=settings.n_configs,

@@ -1,26 +1,32 @@
 import csv
 import json
 import logging
+from collections.abc import Sequence
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 
 from .core import ClusterConfig
-from .params import PARAMS
+from .registry import StrategySpec
 from .visualization import plot_coverage, plot_distributions
 
 logger = logging.getLogger(__name__)
 
 
-def save_strategy_params(output_dir: Path) -> None:
+def save_strategy_params(output_dir: Path, strategies: Sequence[StrategySpec]) -> None:
     """
-    Save the strategy parameter descriptions to a JSON file.
+    Save selected sampling priors; custom strategies without a declared prior use null.
     """
     try:
         dst_params = output_dir / "strategy_params.json"
+        params = {
+            spec.name: asdict(spec.sampling_config) if spec.sampling_config is not None else None
+            for spec in strategies
+        }
         with open(dst_params, "w", encoding="utf-8") as f:
-            json.dump(PARAMS, f, indent=4)
+            json.dump(params, f, indent=4)
         logger.info(f"Saved strategy parameters to {dst_params}")
     except Exception as e:
         logger.error(f"Failed to save strategy parameters: {e}")

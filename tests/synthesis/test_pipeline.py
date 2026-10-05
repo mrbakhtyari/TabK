@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty
@@ -10,10 +11,13 @@ import pytest
 from tabk.synthesis import (
     ClusterConfig,
     GenerationSettings,
+    SamplingConfig,
     StrategySpec,
+    default_registry,
     pipeline,
     run_generation,
 )
+from tabk.synthesis.config import CesarCominConfig, DensiredConfig, LogUniformRange
 from tabk.utils import apply_standard_scaling
 
 
@@ -101,6 +105,7 @@ def test_run_generation_inprocess_avoids_multiprocessing_and_passes(
     )
     run_generation(settings, strategies=[spec], writer=calls_writer)
 
+    assert json.loads((tmp_path / "strategy_params.json").read_text()) == {"DummyLocal": None}
     assert len(calls_writer.calls) == 1
     call = calls_writer.calls[0]
     assert call["strategy_name"] == "DummyLocal"
@@ -108,6 +113,44 @@ def test_run_generation_inprocess_avoids_multiprocessing_and_passes(
     assert len(call["repeats"]) == settings.n_repeats
     for rep in call["repeats"]:
         assert "X" in rep and "y" in rep and "seed" in rep and "strategy_config" in rep
+
+
+def test_run_generation_uses_and_reports_selected_custom_priors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(pipeline, "generate_configs", _fake_generate_configs_single)
+    monkeypatch.setattr(pipeline, "DataGenerator", _fake_data_generator_class())
+    monkeypatch.setattr(pipeline, "config_report", lambda *args, **kwargs: None)
+
+    priors = SamplingConfig(
+        cesar_comin=CesarCominConfig(alpha=LogUniformRange(0.2, 0.3)),
+        densired=DensiredConfig(use_connectors_prob=0, dens_factors_prob=1),
+    )
+    registry = default_registry(priors)
+    selected = [spec for spec in registry if spec.name in {"CesarComin", "Densired"}]
+    writer = RecordingWriter()
+    run_generation(
+        GenerationSettings(n_repeats=3, n_configs=1, output_dir=tmp_path, timeout=0),
+        strategies=selected,
+        writer=writer,
+    )
+
+    assert {call["strategy_name"] for call in writer.calls} == {"CesarComin", "Densired"}
+    for call in writer.calls:
+        for repeat in call["repeats"]:
+            params = repeat["strategy_config"]
+            if call["strategy_name"] == "CesarComin":
+                assert 0.2 <= params["alpha"] <= 0.3
+            else:
+                assert params["connections"] == 0
+                assert params["ratio_con"] == 0
+                assert params["dens_factors"]
+
+    report = json.loads((tmp_path / "strategy_params.json").read_text())
+    assert set(report) == {"CesarComin", "Densired"}
+    assert report["CesarComin"]["alpha"] == {"dist": "loguniform", "low": 0.2, "high": 0.3}
+    assert report["Densired"]["use_connectors_prob"] == 0
+    assert report["Densired"]["dens_factors_prob"] == 1
 
 
 def test_run_generation_supports_cfg_filtering(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

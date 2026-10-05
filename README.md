@@ -115,6 +115,8 @@ TabK/
 │   │   └── export.py            # Conversion to the Hugging Face Hub format
 │   │
 │   ├── synthesis/               # Synthetic data generation (generative prior)
+│   │   ├── config.py            # Typed sampling priors and validation
+│   │   ├── sampling.py          # Hyperparameter samplers
 │   │   ├── strategies.py        # Geometric generators (see paper Section B)
 │   │   ├── pipeline.py          # Parallel generation with timeout safety
 │   │   ├── writer.py            # HDF5 dataset writer
