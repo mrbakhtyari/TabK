@@ -9,7 +9,6 @@ from .sampling import (
     cesar_comin_sampler,
     concentric_hyperspheres_sampler,
     densired_sampler,
-    moons_sampler,
     pyclugen_sampler,
     repliclust_sampler,
 )
@@ -17,7 +16,6 @@ from .strategies import (
     CesarCominStrategy,
     ConcentricHyperspheresStrategy,
     DensiredStrategy,
-    MultiInterlocked2DMoonsStrategy,
     PyClugenStrategy,
     RepliclustStrategy,
 )
@@ -52,12 +50,6 @@ def default_registry() -> list[StrategySpec]:
             ConcentricHyperspheresStrategy,
             lambda rng, cfg: concentric_hyperspheres_sampler(rng),
             lambda cfg: True,
-        ),
-        StrategySpec(
-            "MultiInterlocked2DMoons",
-            MultiInterlocked2DMoonsStrategy,
-            lambda rng, cfg: moons_sampler(rng),
-            lambda cfg: cfg.num_dimensions == 2,
         ),
         StrategySpec(
             "Densired",
