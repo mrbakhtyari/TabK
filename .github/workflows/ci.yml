@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, type-check & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Type check (pyright)
+        # keeps pyright on the locked version's bundled binary instead of querying npm
+        env:
+          PYRIGHT_PYTHON_IGNORE_WARNINGS: "1"
+        run: uv run pyright
+
+      - name: Test (pytest with coverage)
+        run: uv run python -m pytest --cov=src/tabk --cov-report=term-missing --cov-report=html:htmlcov
+
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: htmlcov/

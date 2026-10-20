@@ -1,0 +1,11 @@
+\begin{tabular}{l l c c c c c c}
+\toprule
+Subset & Method & MAE $\downarrow$ & EM (\%) $\uparrow$ & $\tau \leq 1$ (\%) $\uparrow$ & Brier $\downarrow$ & NLL $\downarrow$ & Latency (s) $\downarrow$ \\
+\midrule
+CC18, all (25) & \textbf{TabK} & \textbf{1.56} & \textbf{44.0} & \textbf{60.0} & \textbf{0.718} & \textbf{2.106} & \textbf{0.70} \\
+ & TCP & 2.60 & 40.0 & 56.0 & 0.897 & 5.274 & 4.31 \\
+\midrule
+CC18, $>$500k cells (10) & \textbf{TabK} & \textbf{1.00} & \textbf{60.0} & \textbf{80.0} & \textbf{0.542} & \textbf{1.238} & \textbf{1.66} \\
+ & TCP & 2.00 & 50.0 & 70.0 & 0.904 & 6.180 & 9.88 \\
+\bottomrule
+\end{tabular}

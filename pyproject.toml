@@ -1,0 +1,73 @@
+[project]
+name = "tabk"
+version = "1.0.0"
+description = "TabK: Amortized Bayesian estimation of the number of clusters in tabular data."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Mohammadreza Bakhtyari" }]
+requires-python = ">=3.13"
+dependencies = [
+    "densired>=1.2.0",
+    "h5py>=3.15.1",
+    "huggingface-hub>=2.0.0",
+    "matplotlib>=3.10.6",
+    "numpy>=2.3.2",
+    "pyclugen>=1.1.4",
+    "repliclust>=1.0.0",
+    "safetensors>=0.8.0",
+    "scikit-learn>=1.7.1",
+    "scipy>=1.16.1",
+    "torch>=2.9.1",
+    "tqdm>=4.67.1",
+]
+
+[project.scripts]
+tabk = "tabk.cli:main"
+
+[project.urls]
+Repository = "https://github.com/mrbakhtyari/TabK"
+
+[build-system]
+requires = ["uv_build>=0.8.13,<0.9"]
+build-backend = "uv_build"
+
+[dependency-groups]
+baselines = ["pyclustering>=0.10.1.2"]
+experiments = ["pandas>=2.3.3", "seaborn>=0.13.2"]
+dev = [
+    "pre-commit>=4.3.0",
+    "pyright>=1.1.405",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "ruff==0.13.2",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.uv]
+default-groups = ["dev", "baselines", "experiments"]
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch", marker = "sys_platform == 'win32'" },
+    { index = "pypi", marker = "sys_platform != 'win32'" },
+]

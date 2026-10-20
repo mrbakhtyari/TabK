@@ -1,0 +1,20 @@
+{
+  "include": [
+    "src",
+    "baselines",
+    "experiments"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "extraPaths": [
+    "src"
+  ],
+  "typeCheckingMode": "basic",
+  "reportPrivateImportUsage": false,
+  "reportMissingImports": true,
+  "exclude": [
+    ".venv",
+    "**/site-packages"
+  ]
+}

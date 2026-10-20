@@ -1,0 +1,10 @@
+quantity,value
+oracle_ARI_kmeans,0.2512008445201577
+TabK_oracle_recovery_percent_kmeans,92.18488659822195
+oracle_ARI_gmm,0.25899655962122625
+TabK_oracle_recovery_percent_gmm,85.19990456625578
+oracle_ARI_ge_0.30_datasets,20.0
+oracle_ARI_ge_0.30_TabK_MAE,1.25
+oracle_ARI_ge_0.30_next_best_MAE (VIME+Sil),2.05
+TabK_first_at_every_threshold_0.10_to_0.30,1.0
+single_member_mean_MAE,2.06

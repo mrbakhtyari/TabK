@@ -1,0 +1,17 @@
+\begin{tabular}{l c c @{\hspace{10pt}} l c c}
+\toprule
+\textbf{Model variation} & \textbf{MAE $\downarrow$} & \textbf{$\Delta$} & \textbf{Prior variation} & \textbf{MAE $\downarrow$} & \textbf{$\Delta$} \\
+\midrule
+\multicolumn{3}{l}{\textit{Architectural components}} & \multicolumn{3}{l}{\textit{Prior volume}} \\
+\hspace{4mm} w/o QFE & 1.82 & +0.78 & \hspace{4mm} 25\% of synthetic prior & 1.72 & +0.68 \\
+\hspace{4mm} w/o column attention & 1.48 & +0.44 & \hspace{4mm} 50\% of synthetic prior & 1.46 & +0.42 \\
+\hspace{4mm} w/o PMA & 1.38 & +0.34 & \hspace{4mm} 75\% of synthetic prior & 1.42 & +0.38 \\
+\cmidrule(r){1-3} \cmidrule(l){4-6}
+\multicolumn{3}{l}{\textit{Head formulations}} & \multicolumn{3}{l}{\textit{Leave-one-generator-out}} \\
+\hspace{4mm} Ordinal & 2.34 & +1.30 & \hspace{4mm} w/o networked \cite{jahn2024densired} & 1.70 & +0.66 \\
+\hspace{4mm} Regression & 2.10 & +1.06 & \hspace{4mm} w/o concentric shells & 1.84 & +0.80 \\
+\hspace{4mm} Focal Loss & 1.44 & +0.40 & \hspace{4mm} w/o elliptical \cite{zellinger2025natural} & 1.84 & +0.80 \\
+\hspace{4mm} Classification & 1.40 & +0.36 & \hspace{4mm} w/o Gaussians \cite{rodriguez2019clustering} & 1.86 & +0.82 \\
+ &  &  & \hspace{4mm} w/o elongated \cite{fachada2023generating} & 3.56 & +2.52 \\
+\bottomrule
+\end{tabular}
