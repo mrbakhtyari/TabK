@@ -19,7 +19,7 @@
 
 ## Overview
 
-**TabK** is a set-of-sets Transformer architecture that estimates the number of clusters *k* in a single forward pass, without ever running a clustering algorithm. By amortizing Bayesian inference over a diverse synthetic prior and framing the prediction as an ordinal-aware distribution learning task (DLDL), TabK replaces the expensive iterative grid searches of traditional methods with sub-second inference.
+**TabK** is a zero-shot, permutation-invariant Transformer that estimates the number of clusters *k* in tabular data, without running a clustering algorithm. By amortizing Bayesian inference over a diverse synthetic prior and framing the prediction as an ordinal-aware distribution learning task (DLDL), TabK replaces the expensive iterative grid searches of traditional methods with sub-second inference.
 
 ### Key Results (50 OpenML Benchmarks, 17 Competitors)
 
@@ -46,7 +46,7 @@
 ### Setup
 
 ```bash
-git clone --depth 1 https://github.com/mrbakhtyari/TabK.git
+git clone https://github.com/mrbakhtyari/TabK.git
 cd TabK
 uv sync
 ```

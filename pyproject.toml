@@ -27,6 +27,7 @@ tabk = "tabk.cli:main"
 
 [project.urls]
 Repository = "https://github.com/mrbakhtyari/TabK"
+Model = "https://huggingface.co/mrbakhtyari/TabK"
 
 [build-system]
 requires = ["uv_build>=0.8.13,<0.9"]
